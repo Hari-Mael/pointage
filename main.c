@@ -375,7 +375,7 @@ static int make_date(int y, int m, int d) { return y * 10000 + m * 100 + d; }
 static void today_iso(char out[11]) {
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
-    snprintf(out, 11, "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
+    strftime(out, 11, "%Y-%m-%d", t);
 }
 
 static int parse_date(const char *in, char out[11]) {
@@ -936,7 +936,8 @@ static void next_id(const List *l, char prefix, char out[ID_LEN]) {
         long v = strtol(id + 1, &end, 10);
         if (*end == 0 && v > max) max = v;
     }
-    snprintf(out, ID_LEN, "%c%03ld", prefix, max + 1);
+    long next = max < 0 ? 1 : max >= 99999 ? 99999 : max + 1;
+    snprintf(out, ID_LEN, "%c%03ld", prefix, next);
 }
 
 static void action_add(Session *s, int kind) {
