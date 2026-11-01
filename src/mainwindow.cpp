@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 
-#include <QColor>
 #include <QComboBox>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -15,15 +15,18 @@
 
 #include "fields.h"
 #include "persondialog.h"
-#include "presenceprinter.h"
-#include "restdaysdialog.h"
+#include "presencedialog.h"
 
 namespace {
 
 constexpr int kColId = 0;
 constexpr int kColName = 1;
 constexpr int kColFirstDay = 2;
-constexpr int kDayColumnWidth = 34;
+constexpr int kDayColumnWidth = 36;
+constexpr int kActionsColumnWidth = 250;
+constexpr int kRowHeight = 40;
+
+const char *const kDayShort[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
 
 QTableWidgetItem *makeItem(const QString &text, Qt::Alignment alignment = Qt::AlignCenter)
 {
@@ -33,17 +36,11 @@ QTableWidgetItem *makeItem(const QString &text, Qt::Alignment alignment = Qt::Al
     return item;
 }
 
-PresenceSheet buildSheet(const Database &db, const QString &title, const std::vector<PersonRecord> &people,
-                         int year, int month, int restMask)
+QFrame *makeCard(QWidget *parent)
 {
-    PresenceSheet sheet;
-    sheet.title = title;
-    sheet.year = year;
-    sheet.month = month;
-    sheet.restMask = restMask;
-    for (const PersonRecord &person : people)
-        sheet.rows.push_back({person.code, person.name, db.marks(person.id, year, month)});
-    return sheet;
+    auto *card = new QFrame(parent);
+    card->setObjectName(QStringLiteral("card"));
+    return card;
 }
 
 }
@@ -51,8 +48,8 @@ PresenceSheet buildSheet(const Database &db, const QString &title, const std::ve
 MainWindow::MainWindow(Database &db, const UserRecord &user, QWidget *parent)
     : QMainWindow(parent), m_db(db), m_user(user)
 {
-    setWindowTitle(tr("Pointage — %1").arg(user.name));
-    resize(1280, 760);
+    setWindowTitle(tr("Feuille de Pointage Pro — %1").arg(user.name));
+    resize(1180, 820);
     buildUi();
     refresh();
 }
@@ -60,67 +57,189 @@ MainWindow::MainWindow(Database &db, const UserRecord &user, QWidget *parent)
 void MainWindow::buildUi()
 {
     auto *central = new QWidget(this);
-    auto *layout = new QVBoxLayout(central);
+    central->setObjectName(QStringLiteral("page"));
+    auto *root = new QVBoxLayout(central);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
+
+    root->addWidget(buildHeader());
+    root->addWidget(buildRestBar());
+    root->addWidget(buildSearchBar());
+    root->addWidget(buildTableCard(), 1);
+
+    setCentralWidget(central);
+}
+
+QWidget *MainWindow::buildHeader()
+{
+    QFrame *card = makeCard(this);
+    auto *layout = new QVBoxLayout(card);
+    layout->setContentsMargins(18, 14, 18, 14);
+    layout->setSpacing(10);
+
+    auto *title = new QLabel(QStringLiteral("📋 Feuille de Pointage Pro"), card);
+    title->setObjectName(QStringLiteral("title"));
+    auto *subtitle = new QLabel(QStringLiteral("%1 · %2").arg(m_user.name, m_user.email), card);
+    subtitle->setObjectName(QStringLiteral("subtitle"));
+    layout->addWidget(title);
+    layout->addWidget(subtitle);
 
     const QLocale french(QLocale::French);
-
-    m_kindBox = new QComboBox(this);
-    for (const KindDef &def : allKinds())
-        m_kindBox->addItem(def.plural);
-
-    m_monthBox = new QComboBox(this);
+    m_monthBox = new QComboBox(card);
     for (int month = 1; month <= 12; ++month)
         m_monthBox->addItem(french.monthName(month));
-
-    m_yearBox = new QSpinBox(this);
+    m_yearBox = new QSpinBox(card);
     m_yearBox->setRange(2000, 2100);
 
     const QDate today = QDate::currentDate();
     m_monthBox->setCurrentIndex(today.month() - 1);
     m_yearBox->setValue(today.year());
 
-    m_search = new QLineEdit(this);
-    m_search->setPlaceholderText(tr("Rechercher…"));
+    auto *logout = new QPushButton(tr("Déconnexion"), card);
+    logout->setProperty("variant", QStringLiteral("ghost"));
 
-    auto *addButton = new QPushButton(tr("Ajouter"), this);
-    auto *restButton = new QPushButton(tr("Jours de repos"), this);
-    auto *logoutButton = new QPushButton(tr("Déconnexion"), this);
+    auto *controls = new QHBoxLayout;
+    auto *monthLabel = new QLabel(tr("Mois :"), card);
+    monthLabel->setObjectName(QStringLiteral("muted"));
+    controls->addWidget(monthLabel);
+    controls->addWidget(m_monthBox);
+    controls->addWidget(m_yearBox);
+    controls->addStretch(1);
+    controls->addWidget(logout);
+    layout->addLayout(controls);
 
-    auto *top = new QHBoxLayout;
-    top->addWidget(m_kindBox);
-    top->addWidget(m_monthBox);
-    top->addWidget(m_yearBox);
-    top->addWidget(m_search, 1);
-    top->addWidget(addButton);
-    top->addWidget(restButton);
-    top->addWidget(logoutButton);
-    layout->addLayout(top);
-
-    m_table = new QTableWidget(this);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->setSelectionMode(QAbstractItemView::NoSelection);
-    m_table->verticalHeader()->setVisible(false);
-    m_table->verticalHeader()->setDefaultSectionSize(36);
-    layout->addWidget(m_table, 1);
-
-    m_summary = new QLabel(this);
-    layout->addWidget(m_summary);
-
-    setCentralWidget(central);
-
-    connect(m_kindBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
+    connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
+    return card;
+}
+
+QWidget *MainWindow::buildRestBar()
+{
+    auto *bar = new QFrame(this);
+    bar->setObjectName(QStringLiteral("restBar"));
+    auto *layout = new QVBoxLayout(bar);
+    layout->setContentsMargins(16, 12, 16, 14);
+    layout->setSpacing(10);
+
+    auto *days = new QHBoxLayout;
+    auto *label = new QLabel(tr("Jours de repos :"), bar);
+    label->setObjectName(QStringLiteral("restLabel"));
+    days->addWidget(label);
+    for (int dow = 0; dow < 7; ++dow) {
+        auto *chip = new QPushButton(QString::fromLatin1(kDayShort[dow]), bar);
+        chip->setCheckable(true);
+        chip->setProperty("variant", QStringLiteral("chip"));
+        m_chips[static_cast<size_t>(dow)] = chip;
+        connect(chip, &QPushButton::clicked, this, [this, dow]() { toggleRestDay(dow); });
+        days->addWidget(chip);
+    }
+    days->addStretch(1);
+    layout->addLayout(days);
+
+    auto *actions = new QHBoxLayout;
+    auto *addEmployee = new QPushButton(tr("Ajouter employé"), bar);
+    addEmployee->setProperty("variant", QStringLiteral("teal"));
+    auto *addStudent = new QPushButton(tr("Ajouter élève"), bar);
+    actions->addWidget(addEmployee);
+    actions->addWidget(addStudent);
+    actions->addStretch(1);
+    layout->addLayout(actions);
+
+    connect(addEmployee, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); addPerson(); });
+    connect(addStudent, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); addPerson(); });
+    return bar;
+}
+
+QWidget *MainWindow::buildSearchBar()
+{
+    QFrame *card = makeCard(this);
+    auto *layout = new QHBoxLayout(card);
+    layout->setContentsMargins(14, 10, 14, 10);
+    m_search = new QLineEdit(card);
+    m_search->setPlaceholderText(tr("🔍 Rechercher par ID ou Nom..."));
+    auto *clear = new QPushButton(tr("Effacer"), card);
+    clear->setProperty("variant", QStringLiteral("ghost"));
+    layout->addWidget(m_search, 1);
+    layout->addWidget(clear);
     connect(m_search, &QLineEdit::textChanged, this, &MainWindow::applySearch);
-    connect(addButton, &QPushButton::clicked, this, &MainWindow::addPerson);
-    connect(restButton, &QPushButton::clicked, this, &MainWindow::editRestDays);
-    connect(logoutButton, &QPushButton::clicked, this, &MainWindow::logoutRequested);
+    connect(clear, &QPushButton::clicked, m_search, &QLineEdit::clear);
+    return card;
+}
+
+QWidget *MainWindow::buildTableCard()
+{
+    QFrame *card = makeCard(this);
+    auto *layout = new QVBoxLayout(card);
+    layout->setContentsMargins(14, 14, 14, 14);
+    layout->setSpacing(10);
+
+    auto *tabs = new QHBoxLayout;
+    m_tabEmp = new QPushButton(card);
+    m_tabEmp->setCheckable(true);
+    m_tabEmp->setProperty("variant", QStringLiteral("tab"));
+    m_tabStu = new QPushButton(card);
+    m_tabStu->setCheckable(true);
+    m_tabStu->setProperty("variant", QStringLiteral("tab"));
+    tabs->addWidget(m_tabEmp);
+    tabs->addWidget(m_tabStu);
+    tabs->addStretch(1);
+    layout->addLayout(tabs);
+    connect(m_tabEmp, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); });
+    connect(m_tabStu, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); });
+
+    m_table = new QTableWidget(card);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_table->setSelectionMode(QAbstractItemView::NoSelection);
+    m_table->setFocusPolicy(Qt::NoFocus);
+    m_table->verticalHeader()->setVisible(false);
+    m_table->verticalHeader()->setDefaultSectionSize(kRowHeight);
     connect(m_table, &QTableWidget::cellClicked, this, &MainWindow::onCellClicked);
+    layout->addWidget(m_table, 1);
+
+    layout->addWidget(buildStats());
+
+    auto *hint = new QLabel(tr("Cliquez sur une case : vide → P → A → vide"), card);
+    hint->setObjectName(QStringLiteral("muted"));
+    hint->setAlignment(Qt::AlignCenter);
+    layout->addWidget(hint);
+    return card;
+}
+
+QWidget *MainWindow::buildStats()
+{
+    auto *row = new QWidget(this);
+    auto *layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(10);
+
+    m_statPresent = new QPushButton(row);
+    m_statPresent->setProperty("variant", QStringLiteral("teal"));
+    m_statPresent->setProperty("stat", QStringLiteral("true"));
+    m_statPresent->setFocusPolicy(Qt::NoFocus);
+
+    m_statAbsent = new QPushButton(row);
+    m_statAbsent->setProperty("variant", QStringLiteral("red"));
+    m_statAbsent->setProperty("stat", QStringLiteral("true"));
+    m_statAbsent->setFocusPolicy(Qt::NoFocus);
+
+    m_statEmp = new QPushButton(row);
+    m_statEmp->setProperty("stat", QStringLiteral("true"));
+    connect(m_statEmp, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); });
+
+    m_statStu = new QPushButton(row);
+    m_statStu->setProperty("stat", QStringLiteral("true"));
+    connect(m_statStu, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); });
+
+    layout->addWidget(m_statPresent, 1);
+    layout->addWidget(m_statAbsent, 1);
+    layout->addWidget(m_statEmp, 1);
+    layout->addWidget(m_statStu, 1);
+    return row;
 }
 
 void MainWindow::refresh()
 {
-    const KindDef &def = kindDef(kind());
     const int year = selectedYear();
     const int month = selectedMonth();
     const int days = QDate(year, month, 1).daysInMonth();
@@ -129,22 +248,32 @@ void MainWindow::refresh()
     const int actionsCol = absentCol + 1;
     const QLocale french(QLocale::French);
 
-    m_people = m_db.persons(m_user.id, kind());
+    const size_t employees = m_db.persons(m_user.id, kKindEmployee).size();
+    const size_t students = m_db.persons(m_user.id, kKindStudent).size();
+    m_people = m_db.persons(m_user.id, m_kind);
+
+    m_tabEmp->setText(tr("Employés (%1)").arg(employees));
+    m_tabStu->setText(tr("Élèves (%1)").arg(students));
+    m_tabEmp->setChecked(m_kind == kKindEmployee);
+    m_tabStu->setChecked(m_kind == kKindStudent);
+    for (int dow = 0; dow < 7; ++dow)
+        m_chips[static_cast<size_t>(dow)]->setChecked((m_user.restMask >> dow) & 1);
 
     m_table->setRowCount(0);
     m_table->setColumnCount(actionsCol + 1);
 
     QStringList headers{tr("ID"), tr("Nom")};
     for (int day = 1; day <= days; ++day) {
-        const int weekday = QDate(year, month, day).dayOfWeek();
-        headers << QStringLiteral("%1\n%2").arg(french.dayName(weekday, QLocale::ShortFormat).left(2)).arg(day);
+        const int dow = QDate(year, month, day).dayOfWeek() % 7;
+        headers << QStringLiteral("%1\n%2").arg(QString::fromLatin1(kDayShort[dow])).arg(day);
     }
     headers << tr("P") << tr("A") << tr("Actions");
     m_table->setHorizontalHeaderLabels(headers);
 
-    m_table->horizontalHeader()->setSectionResizeMode(kColName, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(actionsCol, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(kColId, QHeaderView::ResizeToContents);
+    m_table->horizontalHeader()->setSectionResizeMode(kColName, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(actionsCol, QHeaderView::Fixed);
+    m_table->setColumnWidth(actionsCol, kActionsColumnWidth);
     for (int col = kColFirstDay; col < presentCol; ++col)
         m_table->setColumnWidth(col, kDayColumnWidth);
 
@@ -169,7 +298,7 @@ void MainWindow::refresh()
             const QDate date(year, month, day);
             const QChar status = marks.value(day);
             if (isRestDay(date)) {
-                cell->setBackground(QColor("#e6eaf0"));
+                cell->setBackground(QColor("#dfe4ec"));
             } else if (status == QChar('P')) {
                 ++present;
                 cell->setText(QStringLiteral("P"));
@@ -192,11 +321,10 @@ void MainWindow::refresh()
         totalAbsent += absent;
     }
 
-    m_summary->setText(tr("Présences : %1   Absences : %2   %3 : %4")
-                           .arg(totalPresent)
-                           .arg(totalAbsent)
-                           .arg(def.plural)
-                           .arg(rowCount));
+    m_statPresent->setText(tr("Présences : %1").arg(totalPresent));
+    m_statAbsent->setText(tr("Absences : %1").arg(totalAbsent));
+    m_statEmp->setText(tr("Employés : %1").arg(employees));
+    m_statStu->setText(tr("Élèves : %1").arg(students));
     applySearch();
 }
 
@@ -241,84 +369,134 @@ void MainWindow::onCellClicked(int row, int column)
     refresh();
 }
 
-void MainWindow::addPerson()
-{
-    const KindDef &def = kindDef(kind());
-    QStringList codes;
-    for (const PersonRecord &person : m_people)
-        codes << person.code;
-
-    PersonDialog dialog(kind(), m_db.nextCode(m_user.id, kind(), def.prefix), codes, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    if (!m_db.addPerson(m_user.id, kind(), dialog.person()))
-        QMessageBox::critical(this, windowTitle(), tr("Impossible d'enregistrer la fiche (identifiant déjà utilisé ?)."));
-    refresh();
-}
-
-void MainWindow::editRestDays()
-{
-    RestDaysDialog dialog(m_user.restMask, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    m_user.restMask = dialog.mask();
-    m_db.setRestMask(m_user.id, m_user.restMask);
-    refresh();
-}
-
-void MainWindow::printPerson(int personId)
-{
-    for (const PersonRecord &person : m_people) {
-        if (person.id != personId)
-            continue;
-        const PresenceSheet sheet = buildSheet(m_db, tr("Fiche de présence — %1").arg(person.name),
-                                               {person}, selectedYear(), selectedMonth(), m_user.restMask);
-        printPresenceSheet(this, sheet);
-        return;
-    }
-}
-
-void MainWindow::printAll()
-{
-    const PresenceSheet sheet = buildSheet(m_db, tr("Liste de présence — %1").arg(kindDef(kind()).plural),
-                                           m_people, selectedYear(), selectedMonth(), m_user.restMask);
-    printPresenceSheet(this, sheet);
-}
-
-void MainWindow::deletePerson(int personId)
-{
-    for (const PersonRecord &person : m_people) {
-        if (person.id != personId)
-            continue;
-        const auto answer = QMessageBox::question(this, windowTitle(),
-                                                  tr("Supprimer %1 et tout son historique ?").arg(person.name));
-        if (answer != QMessageBox::Yes)
-            return;
-        m_db.deletePerson(personId);
-        refresh();
-        return;
-    }
-}
-
 QWidget *MainWindow::makeActionWidget(int personId)
 {
     auto *box = new QWidget;
     auto *layout = new QHBoxLayout(box);
-    layout->setContentsMargins(2, 2, 2, 2);
+    layout->setContentsMargins(4, 3, 4, 3);
+    layout->setSpacing(6);
 
-    auto *printButton = new QPushButton(tr("Imprimer"), box);
-    auto *listButton = new QPushButton(tr("Liste de présence"), box);
+    auto *insertButton = new QPushButton(tr("Insérer"), box);
+    insertButton->setProperty("variant", QStringLiteral("teal"));
+    insertButton->setProperty("small", QStringLiteral("true"));
+    auto *modifyButton = new QPushButton(tr("Modifier"), box);
+    modifyButton->setProperty("small", QStringLiteral("true"));
     auto *deleteButton = new QPushButton(tr("Supprimer"), box);
-    deleteButton->setStyleSheet(QStringLiteral("color:#d12f3a;"));
+    deleteButton->setProperty("variant", QStringLiteral("red"));
+    deleteButton->setProperty("small", QStringLiteral("true"));
 
-    layout->addWidget(printButton);
-    layout->addWidget(listButton);
+    layout->addWidget(insertButton);
+    layout->addWidget(modifyButton);
     layout->addWidget(deleteButton);
 
-    connect(printButton, &QPushButton::clicked, this, [this, personId]() { printPerson(personId); });
-    connect(listButton, &QPushButton::clicked, this, &MainWindow::printAll);
+    connect(insertButton, &QPushButton::clicked, this, [this, personId]() { insertPresence(personId); });
+    connect(modifyButton, &QPushButton::clicked, this, [this, personId]() { modifyPresence(personId); });
     connect(deleteButton, &QPushButton::clicked, this, [this, personId]() { deletePerson(personId); });
     return box;
+}
+
+const PersonRecord *MainWindow::findPerson(int personId) const
+{
+    for (const PersonRecord &person : m_people) {
+        if (person.id == personId)
+            return &person;
+    }
+    return nullptr;
+}
+
+void MainWindow::setKind(int kind)
+{
+    m_kind = kind;
+    refresh();
+}
+
+void MainWindow::toggleRestDay(int dayOfWeek)
+{
+    m_user.restMask ^= (1 << dayOfWeek);
+    m_db.setRestMask(m_user.id, m_user.restMask);
+    refresh();
+}
+
+void MainWindow::addPerson()
+{
+    const KindDef &def = kindDef(m_kind);
+    QStringList codes;
+    for (const PersonRecord &person : m_people)
+        codes << person.code;
+
+    PersonDialog dialog(m_kind, m_db.nextCode(m_user.id, m_kind, def.prefix), codes, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    if (!m_db.addPerson(m_user.id, m_kind, dialog.person()))
+        QMessageBox::critical(this, windowTitle(), tr("Impossible d'enregistrer la fiche (identifiant déjà utilisé ?)."));
+    refresh();
+}
+
+void MainWindow::insertPresence(int personId)
+{
+    const PersonRecord *person = findPerson(personId);
+    if (!person)
+        return;
+
+    const int year = selectedYear();
+    const int month = selectedMonth();
+    const MarkMap existing = m_db.marks(personId, year, month);
+
+    PresenceDialog dialog(PresenceDialog::Mode::Insert, person->name, year, month, existing, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    int added = 0;
+    int skipped = 0;
+    for (const QDate &date : dialog.dates()) {
+        if (isRestDay(date) || existing.contains(date.day())) {
+            ++skipped;
+            continue;
+        }
+        m_db.setMark(personId, date, dialog.status());
+        ++added;
+    }
+    refresh();
+    QMessageBox::information(this, windowTitle(),
+                             tr("%1 case(s) ajoutée(s), %2 ignorée(s) (repos ou déjà pointées).").arg(added).arg(skipped));
+}
+
+void MainWindow::modifyPresence(int personId)
+{
+    const PersonRecord *person = findPerson(personId);
+    if (!person)
+        return;
+
+    const int year = selectedYear();
+    const int month = selectedMonth();
+    const MarkMap marks = m_db.marks(personId, year, month);
+    if (marks.isEmpty()) {
+        QMessageBox::information(this, windowTitle(),
+                                 tr("Aucune case pointée ce mois-ci pour %1.").arg(person->name));
+        return;
+    }
+
+    PresenceDialog dialog(PresenceDialog::Mode::Modify, person->name, year, month, marks, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const QDate date = dialog.dates().first();
+    m_db.setMark(personId, date, dialog.status());
+    refresh();
+}
+
+void MainWindow::deletePerson(int personId)
+{
+    const PersonRecord *person = findPerson(personId);
+    if (!person)
+        return;
+
+    const auto answer = QMessageBox::question(this, windowTitle(),
+                                              tr("Supprimer %1 et tout son historique ?").arg(person->name));
+    if (answer != QMessageBox::Yes)
+        return;
+
+    m_db.deletePerson(personId);
+    refresh();
 }
