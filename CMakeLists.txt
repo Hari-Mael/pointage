@@ -6,10 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql PrintSupport)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 
 add_executable(pointage
     src/main.cpp
+    src/theme.h
+    src/theme.cpp
     src/auth.h
     src/auth.cpp
     src/database.h
@@ -22,13 +24,11 @@ add_executable(pointage
     src/mainwindow.cpp
     src/persondialog.h
     src/persondialog.cpp
-    src/restdaysdialog.h
-    src/restdaysdialog.cpp
-    src/presenceprinter.h
-    src/presenceprinter.cpp
+    src/presencedialog.h
+    src/presencedialog.cpp
 )
 
-target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::PrintSupport)
+target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql)
 
 if(WIN32)
     set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
