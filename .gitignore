@@ -1,0 +1,6 @@
+pointage_data/
+*.dat
+*.tmp
+pointage_*.html
+*.o
+pointage
