@@ -1,137 +1,128 @@
-#include "persondialog.h"
+#include "presencedialog.h"
 
 #include <QComboBox>
-#include <QDialogButtonBox>
-#include <QFormLayout>
+#include <QDateEdit>
+#include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
+#include <QLocale>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QVBoxLayout>
 
-#include "fields.h"
-
-namespace {
-
-QWidget *makeInput(const FieldDef &field, QWidget *parent)
+PresenceDialog::PresenceDialog(Mode mode, const QString &personName, int year, int month, const MarkMap &marks,
+                               QWidget *parent)
+    : QDialog(parent), m_mode(mode), m_year(year), m_month(month)
 {
-    if (field.type == FieldType::Choice) {
-        auto *box = new QComboBox(parent);
-        box->addItem(QString());
-        box->addItems(field.choices);
-        return box;
-    }
-    auto *edit = new QLineEdit(parent);
-    if (field.type == FieldType::Date)
-        edit->setPlaceholderText(QStringLiteral("JJ/MM/AAAA"));
-    return edit;
-}
+    const QLocale french(QLocale::French);
+    const QDate first(year, month, 1);
+    const QDate last(year, month, first.daysInMonth());
 
-QString valueOf(const QWidget *input)
-{
-    if (const auto *box = qobject_cast<const QComboBox *>(input))
-        return box->currentText();
-    if (const auto *edit = qobject_cast<const QLineEdit *>(input))
-        return edit->text().trimmed();
-    return {};
-}
-
-}
-
-PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QStringList &existingCodes, QWidget *parent)
-    : QDialog(parent), m_kind(kind), m_existingCodes(existingCodes)
-{
-    const KindDef &def = kindDef(kind);
-    setWindowTitle(tr("Fiche %1").arg(def.singular));
-    resize(460, 620);
+    setWindowTitle(mode == Mode::Insert ? tr("Insérer") : tr("Modifier"));
+    resize(440, 360);
 
     auto *layout = new QVBoxLayout(this);
-    auto *form = new QFormLayout;
+    layout->setContentsMargins(18, 18, 18, 18);
+    layout->setSpacing(12);
 
-    m_code = new QLineEdit(suggestedCode, this);
-    form->addRow(def.idLabel + QStringLiteral(" *"), m_code);
+    auto *title = new QLabel(QStringLiteral("%1 — %2").arg(windowTitle(), personName), this);
+    title->setObjectName(QStringLiteral("title"));
+    layout->addWidget(title);
 
-    QString currentSection;
-    for (const FieldDef &field : def.fields) {
-        if (field.section != currentSection) {
-            currentSection = field.section;
-            form->addRow(new QLabel(QStringLiteral("<b>%1</b>").arg(currentSection), this));
+    auto *statusRow = new QHBoxLayout;
+    m_present = new QPushButton(tr("Présence"), this);
+    m_present->setCheckable(true);
+    m_present->setProperty("variant", QStringLiteral("presentChoice"));
+    m_absent = new QPushButton(tr("Absence"), this);
+    m_absent->setCheckable(true);
+    m_absent->setProperty("variant", QStringLiteral("absentChoice"));
+    statusRow->addWidget(m_present);
+    statusRow->addWidget(m_absent);
+    connect(m_present, &QPushButton::clicked, this, [this]() { setChoice(QChar('P')); });
+    connect(m_absent, &QPushButton::clicked, this, [this]() { setChoice(QChar('A')); });
+
+    if (mode == Mode::Modify) {
+        m_clear = new QPushButton(tr("Effacer"), this);
+        m_clear->setCheckable(true);
+        m_clear->setProperty("variant", QStringLiteral("choice"));
+        statusRow->addWidget(m_clear);
+        connect(m_clear, &QPushButton::clicked, this, [this]() { setChoice(QChar()); });
+    }
+    layout->addLayout(statusRow);
+
+    if (mode == Mode::Insert) {
+        auto *dateRow = new QHBoxLayout;
+        m_from = new QDateEdit(first, this);
+        m_to = new QDateEdit(first, this);
+        for (QDateEdit *edit : {m_from, m_to}) {
+            edit->setCalendarPopup(true);
+            edit->setDisplayFormat(QStringLiteral("dd/MM/yyyy"));
+            edit->setMinimumDate(first);
+            edit->setMaximumDate(last);
         }
-        QWidget *input = makeInput(field, this);
-        m_inputs.push_back(input);
-        form->addRow(field.label + (field.required ? QStringLiteral(" *") : QString()), input);
+        dateRow->addWidget(new QLabel(tr("Du"), this));
+        dateRow->addWidget(m_from, 1);
+        dateRow->addWidget(new QLabel(tr("au"), this));
+        dateRow->addWidget(m_to, 1);
+        layout->addLayout(dateRow);
+        setChoice(QChar('P'));
+    } else {
+        m_day = new QComboBox(this);
+        for (auto it = marks.cbegin(); it != marks.cend(); ++it) {
+            const QDate date(year, month, it.key());
+            const QString label = french.toString(date, QStringLiteral("dddd d MMMM"))
+                                  + (it.value() == QChar('P') ? tr(" — Présence") : tr(" — Absence"));
+            m_day->addItem(label, it.key());
+        }
+        layout->addWidget(m_day);
     }
 
-    layout->addLayout(form);
+    layout->addStretch(1);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, this, &PersonDialog::validateAndAccept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    auto *buttons = new QHBoxLayout;
+    auto *cancel = new QPushButton(tr("Annuler"), this);
+    cancel->setProperty("variant", QStringLiteral("ghost"));
+    auto *save = new QPushButton(tr("Enregistrer"), this);
+    save->setProperty("variant", QStringLiteral("teal"));
+    buttons->addStretch(1);
+    buttons->addWidget(cancel);
+    buttons->addWidget(save);
+    layout->addLayout(buttons);
+
+    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+    connect(save, &QPushButton::clicked, this, &PresenceDialog::onSave);
 }
 
-void PersonDialog::validateAndAccept()
+void PresenceDialog::setChoice(QChar status)
 {
-    const KindDef &def = kindDef(m_kind);
+    m_status = status;
+    m_chosen = true;
+    m_present->setChecked(status == QChar('P'));
+    m_absent->setChecked(status == QChar('A'));
+    if (m_clear)
+        m_clear->setChecked(status.isNull());
+}
 
-    const QString code = m_code->text().trimmed();
-    if (!isValidCode(code)) {
-        QMessageBox::warning(this, windowTitle(), tr("Identifiant invalide (1 à 16 caractères : lettres, chiffres, - et _)."));
+QList<QDate> PresenceDialog::dates() const
+{
+    QList<QDate> out;
+    if (m_mode == Mode::Modify) {
+        out << QDate(m_year, m_month, m_day->currentData().toInt());
+        return out;
+    }
+    for (QDate day = m_from->date(); day <= m_to->date(); day = day.addDays(1))
+        out << day;
+    return out;
+}
+
+void PresenceDialog::onSave()
+{
+    if (!m_chosen) {
+        QMessageBox::warning(this, windowTitle(), tr("Choisis Présence, Absence ou Effacer."));
         return;
     }
-    if (m_existingCodes.contains(code)) {
-        QMessageBox::warning(this, windowTitle(), tr("Cet identifiant existe déjà."));
+    if (m_mode == Mode::Insert && m_from->date() > m_to->date()) {
+        QMessageBox::warning(this, windowTitle(), tr("La date de début doit être avant la date de fin."));
         return;
     }
-
-    QStringList values;
-    for (size_t i = 0; i < def.fields.size(); ++i) {
-        const FieldDef &field = def.fields[i];
-        QString value = valueOf(m_inputs[i]);
-
-        if (value.isEmpty()) {
-            if (field.required) {
-                QMessageBox::warning(this, windowTitle(), tr("Champ obligatoire : %1").arg(field.label));
-                return;
-            }
-            values << QString();
-            continue;
-        }
-
-        switch (field.type) {
-        case FieldType::Email:
-            if (!isValidEmail(value)) {
-                QMessageBox::warning(this, windowTitle(), tr("Email invalide : %1").arg(field.label));
-                return;
-            }
-            break;
-        case FieldType::Phone:
-            if (!isValidPhone(value)) {
-                QMessageBox::warning(this, windowTitle(), tr("Numéro invalide : %1").arg(field.label));
-                return;
-            }
-            break;
-        case FieldType::Date:
-            value = normalizeDate(value);
-            if (value.isEmpty()) {
-                QMessageBox::warning(this, windowTitle(), tr("Date invalide (JJ/MM/AAAA) : %1").arg(field.label));
-                return;
-            }
-            break;
-        case FieldType::Text:
-        case FieldType::Choice:
-            break;
-        }
-        values << value;
-    }
-
-    const QString orderError = checkDateOrder(m_kind, values);
-    if (!orderError.isEmpty()) {
-        QMessageBox::warning(this, windowTitle(), orderError);
-        return;
-    }
-
-    m_person.code = code;
-    m_person.name = values.value(0) + QLatin1Char(' ') + values.value(1);
-    m_person.fields = values;
     accept();
 }
