@@ -8,6 +8,7 @@
 #include "database.h"
 #include "logindialog.h"
 #include "mainwindow.h"
+#include "theme.h"
 
 namespace {
 
@@ -48,6 +49,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Pointage"));
     QApplication::setOrganizationName(QStringLiteral("Hari-Mael"));
+    applyTheme(app);
 
     const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dataDir);
