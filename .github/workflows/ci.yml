@@ -30,7 +30,7 @@ jobs:
         run: cd build && ctest --output-on-failure
 
   windows:
-    name: Compilation (Windows)
+    name: Installateur Windows
     runs-on: windows-2022
     env:
       QT_DIR: C:/Qt/6.7.3/msvc2019_64
@@ -47,8 +47,28 @@ jobs:
           python -m pip install --upgrade pip aqtinstall
           python -m aqt install-qt windows desktop 6.7.3 win64_msvc2019_64 -O C:/Qt
 
-      - name: Configurer
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_DIR"
-
       - name: Compiler
-        run: cmake --build build --config Release
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_DIR"
+          cmake --build build --config Release
+
+      - name: Préparer les fichiers
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/Pointage | Out-Null
+          Copy-Item build/Release/pointage.exe dist/Pointage/
+          & "$env:QT_DIR/bin/windeployqt.exe" --release --no-translations dist/Pointage/pointage.exe
+
+      - name: Installer Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Créer l'installateur
+        shell: pwsh
+        run: & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/pointage.iss
+
+      - name: Sauvegarder l'installateur
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pointage-Setup
+          path: dist/Pointage-Setup-*.exe
