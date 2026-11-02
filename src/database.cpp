@@ -192,6 +192,12 @@ bool Database::deletePerson(int personId)
     return runQuery(query, QStringLiteral("DELETE FROM persons WHERE id = ?"), {personId});
 }
 
+bool Database::clearMarks(int personId)
+{
+    QSqlQuery query(connection());
+    return runQuery(query, QStringLiteral("DELETE FROM marks WHERE person_id = ?"), {personId});
+}
+
 MarkMap Database::marks(int personId, int year, int month) const
 {
     MarkMap result;
