@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Créer l'installation Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          arch: win64_msvc2019_64
+          modules: 'qtsql'
+          cache: true
+
+      - name: Compiler
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+          cmake --build build --config Release
+
+      - name: Préparer le dossier d'installation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/Pointage | Out-Null
+          Copy-Item build/Release/pointage.exe dist/Pointage/
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations dist/Pointage/pointage.exe
+
+      - name: Archiver
+        shell: pwsh
+        run: Compress-Archive -Path dist/Pointage/* -DestinationPath "Pointage-${{ github.ref_name }}-windows.zip"
+
+      - name: Publier la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Pointage-${{ github.ref_name }}-windows.zip
+          generate_release_notes: true
