@@ -31,20 +31,24 @@ jobs:
 
   windows:
     name: Compilation (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
+    env:
+      QT_DIR: C:/Qt/6.7.3/msvc2019_64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Installer Qt
-        uses: jurplel/install-qt-action@v4
+      - name: Installer Python
+        uses: actions/setup-python@v5
         with:
-          version: '6.7.*'
-          arch: win64_msvc2019_64
-          modules: 'qtsql'
-          cache: true
+          python-version: '3.12'
+
+      - name: Installer Qt
+        run: |
+          python -m pip install --upgrade pip aqtinstall
+          python -m aqt install-qt windows desktop 6.7.3 win64_msvc2019_64 -m qtsql -O C:/Qt
 
       - name: Configurer
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_DIR"
 
       - name: Compiler
         run: cmake --build build --config Release
