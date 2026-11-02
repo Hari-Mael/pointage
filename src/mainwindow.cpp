@@ -19,11 +19,12 @@
 
 namespace {
 
-constexpr int kColId = 0;
-constexpr int kColName = 1;
-constexpr int kColFirstDay = 2;
+constexpr int kColCheck = 0;
+constexpr int kColId = 1;
+constexpr int kColName = 2;
+constexpr int kColFirstDay = 3;
 constexpr int kDayColumnWidth = 36;
-constexpr int kActionsColumnWidth = 250;
+constexpr int kActionsColumnWidth = 270;
 constexpr int kRowHeight = 40;
 
 const char *const kDayShort[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
@@ -73,16 +74,18 @@ void MainWindow::buildUi()
 QWidget *MainWindow::buildHeader()
 {
     QFrame *card = makeCard(this);
-    auto *layout = new QVBoxLayout(card);
+    auto *layout = new QHBoxLayout(card);
     layout->setContentsMargins(18, 14, 18, 14);
-    layout->setSpacing(10);
+    layout->setSpacing(12);
 
+    auto *titles = new QVBoxLayout;
     auto *title = new QLabel(QStringLiteral("📋 Feuille de Pointage Pro"), card);
     title->setObjectName(QStringLiteral("title"));
     auto *subtitle = new QLabel(QStringLiteral("%1 · %2").arg(m_user.name, m_user.email), card);
     subtitle->setObjectName(QStringLiteral("subtitle"));
-    layout->addWidget(title);
-    layout->addWidget(subtitle);
+    titles->addWidget(title);
+    titles->addWidget(subtitle);
+    layout->addLayout(titles, 1);
 
     const QLocale french(QLocale::French);
     m_monthBox = new QComboBox(card);
@@ -95,18 +98,15 @@ QWidget *MainWindow::buildHeader()
     m_monthBox->setCurrentIndex(today.month() - 1);
     m_yearBox->setValue(today.year());
 
+    auto *monthLabel = new QLabel(tr("Mois :"), card);
+    monthLabel->setObjectName(QStringLiteral("muted"));
     auto *logout = new QPushButton(tr("Déconnexion"), card);
     logout->setProperty("variant", QStringLiteral("ghost"));
 
-    auto *controls = new QHBoxLayout;
-    auto *monthLabel = new QLabel(tr("Mois :"), card);
-    monthLabel->setObjectName(QStringLiteral("muted"));
-    controls->addWidget(monthLabel);
-    controls->addWidget(m_monthBox);
-    controls->addWidget(m_yearBox);
-    controls->addStretch(1);
-    controls->addWidget(logout);
-    layout->addLayout(controls);
+    layout->addWidget(monthLabel);
+    layout->addWidget(m_monthBox);
+    layout->addWidget(m_yearBox);
+    layout->addWidget(logout);
 
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
@@ -118,33 +118,28 @@ QWidget *MainWindow::buildRestBar()
 {
     auto *bar = new QFrame(this);
     bar->setObjectName(QStringLiteral("restBar"));
-    auto *layout = new QVBoxLayout(bar);
-    layout->setContentsMargins(16, 12, 16, 14);
-    layout->setSpacing(10);
+    auto *layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(16, 12, 16, 12);
+    layout->setSpacing(8);
 
-    auto *days = new QHBoxLayout;
     auto *label = new QLabel(tr("Jours de repos :"), bar);
     label->setObjectName(QStringLiteral("restLabel"));
-    days->addWidget(label);
+    layout->addWidget(label);
     for (int dow = 0; dow < 7; ++dow) {
         auto *chip = new QPushButton(QString::fromLatin1(kDayShort[dow]), bar);
         chip->setCheckable(true);
         chip->setProperty("variant", QStringLiteral("chip"));
         m_chips[static_cast<size_t>(dow)] = chip;
         connect(chip, &QPushButton::clicked, this, [this, dow]() { toggleRestDay(dow); });
-        days->addWidget(chip);
+        layout->addWidget(chip);
     }
-    days->addStretch(1);
-    layout->addLayout(days);
+    layout->addStretch(1);
 
-    auto *actions = new QHBoxLayout;
     auto *addEmployee = new QPushButton(tr("Ajouter employé"), bar);
     addEmployee->setProperty("variant", QStringLiteral("teal"));
     auto *addStudent = new QPushButton(tr("Ajouter élève"), bar);
-    actions->addWidget(addEmployee);
-    actions->addWidget(addStudent);
-    actions->addStretch(1);
-    layout->addLayout(actions);
+    layout->addWidget(addEmployee);
+    layout->addWidget(addStudent);
 
     connect(addEmployee, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); addPerson(); });
     connect(addStudent, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); addPerson(); });
@@ -262,7 +257,7 @@ void MainWindow::refresh()
     m_table->setRowCount(0);
     m_table->setColumnCount(actionsCol + 1);
 
-    QStringList headers{tr("ID"), tr("Nom")};
+    QStringList headers{QString(), tr("ID"), tr("Nom")};
     for (int day = 1; day <= days; ++day) {
         const int dow = QDate(year, month, day).dayOfWeek() % 7;
         headers << QStringLiteral("%1\n%2").arg(QString::fromLatin1(kDayShort[dow])).arg(day);
@@ -270,6 +265,8 @@ void MainWindow::refresh()
     headers << tr("P") << tr("A") << tr("Actions");
     m_table->setHorizontalHeaderLabels(headers);
 
+    m_table->horizontalHeader()->setSectionResizeMode(kColCheck, QHeaderView::Fixed);
+    m_table->setColumnWidth(kColCheck, 36);
     m_table->horizontalHeader()->setSectionResizeMode(kColId, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(kColName, QHeaderView::Stretch);
     m_table->horizontalHeader()->setSectionResizeMode(actionsCol, QHeaderView::Fixed);
@@ -287,6 +284,11 @@ void MainWindow::refresh()
         const MarkMap marks = m_db.marks(person.id, year, month);
         int present = 0;
         int absent = 0;
+
+        auto *check = new QTableWidgetItem;
+        check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        check->setCheckState(Qt::Unchecked);
+        m_table->setItem(row, kColCheck, check);
 
         QTableWidgetItem *idItem = makeItem(person.code, Qt::AlignLeft);
         idItem->setData(Qt::UserRole, person.id);
@@ -492,11 +494,35 @@ void MainWindow::deletePerson(int personId)
     if (!person)
         return;
 
-    const auto answer = QMessageBox::question(this, windowTitle(),
-                                              tr("Supprimer %1 et tout son historique ?").arg(person->name));
+    const QString name = person->name;
+    const QString kindLabel = kindDef(m_kind).singular;
+
+    QMessageBox box(this);
+    box.setWindowTitle(windowTitle());
+    box.setIcon(QMessageBox::Question);
+    box.setText(tr("Que voulez-vous faire pour %1 (%2) ?").arg(name, kindLabel));
+    box.setInformativeText(tr("Effacer l'historique garde la fiche et supprime toutes ses cases pointées.\n"
+                              "Supprimer la personne retire la fiche et tout son historique."));
+    QPushButton *clearButton = box.addButton(tr("Effacer l'historique"), QMessageBox::ActionRole);
+    QPushButton *removeButton = box.addButton(tr("Supprimer la personne"), QMessageBox::DestructiveRole);
+    box.addButton(QMessageBox::Cancel);
+    box.exec();
+
+    const QAbstractButton *clicked = box.clickedButton();
+    if (clicked != clearButton && clicked != removeButton)
+        return;
+
+    const bool clearOnly = clicked == clearButton;
+    const auto answer = QMessageBox::question(
+        this, windowTitle(),
+        clearOnly ? tr("Effacer tout l'historique de %1 ? Cette action est définitive.").arg(name)
+                  : tr("Supprimer %1 et tout son historique ? Cette action est définitive.").arg(name));
     if (answer != QMessageBox::Yes)
         return;
 
-    m_db.deletePerson(personId);
+    if (clearOnly)
+        m_db.clearMarks(personId);
+    else
+        m_db.deletePerson(personId);
     refresh();
 }
