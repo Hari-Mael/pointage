@@ -42,6 +42,7 @@ public:
     QString nextCode(int userId, int kind, QChar prefix) const;
     bool addPerson(int userId, int kind, const PersonRecord &person);
     bool deletePerson(int personId);
+    bool clearMarks(int personId);
 
     MarkMap marks(int personId, int year, int month) const;
     bool setMark(int personId, const QDate &date, QChar status);
