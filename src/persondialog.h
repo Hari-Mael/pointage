@@ -1,42 +1,26 @@
 #pragma once
 
-#include <QChar>
-#include <QDate>
 #include <QDialog>
-#include <QList>
+#include <QStringList>
+#include <vector>
 
 #include "database.h"
 
-class QComboBox;
-class QDateEdit;
-class QPushButton;
+class QLineEdit;
 
-class PresenceDialog : public QDialog {
+class PersonDialog : public QDialog {
     Q_OBJECT
 public:
-    enum class Mode { Insert, Modify };
-
-    PresenceDialog(Mode mode, const QString &personName, int year, int month, const MarkMap &marks,
-                   QWidget *parent = nullptr);
-
-    QChar status() const { return m_status; }
-    QList<QDate> dates() const;
+    PersonDialog(int kind, const QString &suggestedCode, const QStringList &existingCodes, QWidget *parent = nullptr);
+    PersonRecord person() const { return m_person; }
 
 private slots:
-    void onSave();
+    void validateAndAccept();
 
 private:
-    void setChoice(QChar status);
-
-    Mode m_mode;
-    int m_year;
-    int m_month;
-    QChar m_status;
-    bool m_chosen = false;
-    QPushButton *m_present = nullptr;
-    QPushButton *m_absent = nullptr;
-    QPushButton *m_clear = nullptr;
-    QDateEdit *m_from = nullptr;
-    QDateEdit *m_to = nullptr;
-    QComboBox *m_day = nullptr;
+    int m_kind;
+    QStringList m_existingCodes;
+    QLineEdit *m_code = nullptr;
+    std::vector<QWidget *> m_inputs;
+    PersonRecord m_person;
 };
