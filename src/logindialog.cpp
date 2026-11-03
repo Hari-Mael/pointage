@@ -3,11 +3,12 @@
 #include <QDateTime>
 #include <QFormLayout>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QTabWidget>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 #include "auth.h"
@@ -19,71 +20,106 @@ constexpr int kMinPasswordLength = 8;
 constexpr int kMaxFailedLogins = 5;
 constexpr qint64 kLockSeconds = 15 * 60;
 
+QLineEdit *makeField(const QString &placeholder, bool password, QWidget *parent)
+{
+    auto *edit = new QLineEdit(parent);
+    edit->setObjectName(QStringLiteral("embossed"));
+    edit->setPlaceholderText(placeholder);
+    if (password)
+        edit->setEchoMode(QLineEdit::Password);
+    return edit;
+}
+
+QPushButton *makeButton(const QString &text, const QString &name, QWidget *parent)
+{
+    auto *button = new QPushButton(text, parent);
+    button->setObjectName(name);
+    return button;
+}
+
 }
 
 LoginDialog::LoginDialog(Database &db, QWidget *parent)
     : QDialog(parent), m_db(db)
 {
+    setObjectName(QStringLiteral("loginDialog"));
     setWindowTitle(tr("Pointage"));
-    resize(420, 520);
+    resize(420, 600);
 
     auto *card = new QFrame(this);
-    card->setObjectName(QStringLiteral("card"));
+    card->setObjectName(QStringLiteral("loginCard"));
     auto *cardLayout = new QVBoxLayout(card);
-    cardLayout->setContentsMargins(20, 24, 20, 20);
-    cardLayout->setSpacing(12);
+    cardLayout->setContentsMargins(30, 30, 30, 30);
+    cardLayout->setSpacing(14);
 
-    auto *icon = new QLabel(QStringLiteral("📋"), card);
-    icon->setObjectName(QStringLiteral("icon"));
+    auto *icon = new QLabel(QStringLiteral("🔐"), card);
+    icon->setObjectName(QStringLiteral("iconCircle"));
     icon->setAlignment(Qt::AlignCenter);
-    auto *welcome = new QLabel(tr("Feuille de Pointage Pro"), card);
-    welcome->setObjectName(QStringLiteral("welcome"));
-    welcome->setAlignment(Qt::AlignCenter);
+    icon->setFixedSize(72, 72);
+    auto *iconRow = new QHBoxLayout;
+    iconRow->addStretch(1);
+    iconRow->addWidget(icon);
+    iconRow->addStretch(1);
+    cardLayout->addLayout(iconRow);
+
+    auto *title = new QLabel(tr("Bienvenue"), card);
+    title->setObjectName(QStringLiteral("welcome"));
+    title->setAlignment(Qt::AlignCenter);
     auto *subtitle = new QLabel(tr("Connectez-vous pour continuer"), card);
     subtitle->setObjectName(QStringLiteral("subtitle"));
     subtitle->setAlignment(Qt::AlignCenter);
-    cardLayout->addWidget(icon);
-    cardLayout->addWidget(welcome);
+    cardLayout->addWidget(title);
     cardLayout->addWidget(subtitle);
+    cardLayout->addSpacing(8);
 
-    auto *tabs = new QTabWidget(card);
+    auto *stack = new QStackedWidget(card);
 
-    auto *loginPage = new QWidget(tabs);
-    auto *loginForm = new QFormLayout(loginPage);
-    m_loginEmail = new QLineEdit(loginPage);
-    m_loginPassword = new QLineEdit(loginPage);
-    m_loginPassword->setEchoMode(QLineEdit::Password);
-    loginForm->addRow(tr("Email"), m_loginEmail);
-    loginForm->addRow(tr("Mot de passe"), m_loginPassword);
-    auto *loginButton = new QPushButton(tr("Se connecter"), loginPage);
-    loginButton->setProperty("variant", QStringLiteral("blue"));
-    loginForm->addRow(loginButton);
+    auto *loginPage = new QWidget(stack);
+    auto *loginLayout = new QVBoxLayout(loginPage);
+    loginLayout->setContentsMargins(0, 0, 0, 0);
+    loginLayout->setSpacing(14);
+    m_loginEmail = makeField(tr("Adresse email"), false, loginPage);
+    m_loginPassword = makeField(tr("Mot de passe"), true, loginPage);
+    auto *loginButton = makeButton(tr("CONNEXION"), QStringLiteral("embossButton"), loginPage);
+    auto *toRegister = makeButton(tr("Pas encore de compte ? Créer un compte"), QStringLiteral("linkButton"), loginPage);
+    loginLayout->addWidget(m_loginEmail);
+    loginLayout->addWidget(m_loginPassword);
+    loginLayout->addSpacing(6);
+    loginLayout->addWidget(loginButton);
+    loginLayout->addWidget(toRegister, 0, Qt::AlignCenter);
+    loginLayout->addStretch(1);
+    stack->addWidget(loginPage);
+
+    auto *registerPage = new QWidget(stack);
+    auto *registerLayout = new QVBoxLayout(registerPage);
+    registerLayout->setContentsMargins(0, 0, 0, 0);
+    registerLayout->setSpacing(14);
+    m_regName = makeField(tr("Nom complet"), false, registerPage);
+    m_regEmail = makeField(tr("Adresse email"), false, registerPage);
+    m_regPassword = makeField(tr("Mot de passe (8 caractères min.)"), true, registerPage);
+    m_regConfirm = makeField(tr("Confirmer le mot de passe"), true, registerPage);
+    auto *registerButton = makeButton(tr("CRÉER LE COMPTE"), QStringLiteral("embossButton"), registerPage);
+    auto *toLogin = makeButton(tr("Déjà un compte ? Se connecter"), QStringLiteral("linkButton"), registerPage);
+    registerLayout->addWidget(m_regName);
+    registerLayout->addWidget(m_regEmail);
+    registerLayout->addWidget(m_regPassword);
+    registerLayout->addWidget(m_regConfirm);
+    registerLayout->addSpacing(6);
+    registerLayout->addWidget(registerButton);
+    registerLayout->addWidget(toLogin, 0, Qt::AlignCenter);
+    registerLayout->addStretch(1);
+    stack->addWidget(registerPage);
+
+    cardLayout->addWidget(stack, 1);
+
     connect(loginButton, &QPushButton::clicked, this, &LoginDialog::tryLogin);
     connect(m_loginPassword, &QLineEdit::returnPressed, this, &LoginDialog::tryLogin);
-    tabs->addTab(loginPage, tr("Connexion"));
-
-    auto *registerPage = new QWidget(tabs);
-    auto *registerForm = new QFormLayout(registerPage);
-    m_regName = new QLineEdit(registerPage);
-    m_regEmail = new QLineEdit(registerPage);
-    m_regPassword = new QLineEdit(registerPage);
-    m_regPassword->setEchoMode(QLineEdit::Password);
-    m_regConfirm = new QLineEdit(registerPage);
-    m_regConfirm->setEchoMode(QLineEdit::Password);
-    registerForm->addRow(tr("Nom complet"), m_regName);
-    registerForm->addRow(tr("Email"), m_regEmail);
-    registerForm->addRow(tr("Mot de passe (8 caractères min.)"), m_regPassword);
-    registerForm->addRow(tr("Confirmer"), m_regConfirm);
-    auto *registerButton = new QPushButton(tr("Créer le compte"), registerPage);
-    registerButton->setProperty("variant", QStringLiteral("teal"));
-    registerForm->addRow(registerButton);
     connect(registerButton, &QPushButton::clicked, this, &LoginDialog::tryRegister);
-    tabs->addTab(registerPage, tr("Créer un compte"));
-
-    cardLayout->addWidget(tabs);
+    connect(toRegister, &QPushButton::clicked, this, [stack]() { stack->setCurrentIndex(1); });
+    connect(toLogin, &QPushButton::clicked, this, [stack]() { stack->setCurrentIndex(0); });
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setContentsMargins(20, 20, 20, 20);
     layout->addWidget(card);
 }
 
