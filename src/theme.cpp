@@ -88,6 +88,47 @@ QTableCornerButton::section { background: #0b3b5c; border: 0; }
 QScrollBar:horizontal { height: 8px; background: #e6eaf0; border-radius: 4px; }
 QScrollBar::handle:horizontal { background: #b6c0cc; border-radius: 4px; min-width: 40px; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QDialog#loginDialog { background: #e6eaf0; }
+QFrame#loginCard {
+    background: #e6eaf0;
+    border: 1px solid #ffffff;
+    border-radius: 28px;
+}
+QLabel#iconCircle {
+    background: #e6eaf0;
+    border: 1px solid #ffffff;
+    border-radius: 36px;
+    font-size: 24pt;
+}
+QLabel#welcome { color: #1d2a33; font-size: 20pt; font-weight: 800; }
+QLabel#subtitle { color: #5e7587; font-size: 10pt; }
+QLineEdit#embossed {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d3d9e2, stop:1 #eef1f6);
+    border: 1px solid #ffffff;
+    border-radius: 16px;
+    padding: 12px 16px;
+    color: #1d2a33;
+}
+QLineEdit#embossed:focus { border: 1px solid #1e8bff; }
+QPushButton#embossButton {
+    background: #e6eaf0;
+    color: #1e6fe0;
+    border: 1px solid #ffffff;
+    border-radius: 16px;
+    padding: 12px 16px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+QPushButton#embossButton:hover { background: #dfe5ee; }
+QPushButton#embossButton:pressed { background: #d3d9e2; }
+QPushButton#linkButton {
+    background: transparent;
+    color: #1e6fe0;
+    border: 0;
+    padding: 4px 6px;
+    font-weight: 600;
+}
+QPushButton#linkButton:hover { color: #0b4ea8; }
 QToolTip { background: #0b3b5c; color: #ffffff; border: 0; padding: 4px; }
 )QSS"));
 }
