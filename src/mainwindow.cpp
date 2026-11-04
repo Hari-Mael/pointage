@@ -15,16 +15,18 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
-#include <QApplication>
-
+#include "dashboarddialog.h"
 #include "exporter.h"
 #include "fields.h"
-#include "logo.h"
 #include "persondialog.h"
 #include "presencedialog.h"
 #include "privacynotice.h"
+#include "logo.h"
+
+#include <QApplication>
 
 namespace {
 
@@ -111,6 +113,11 @@ void MainWindow::buildUi()
     root->addWidget(buildTableCard(), 1);
 
     setCentralWidget(central);
+
+    m_liveTimer = new QTimer(this);
+    m_liveTimer->setInterval(30000);
+    connect(m_liveTimer, &QTimer::timeout, this, &MainWindow::liveUpdate);
+    m_liveTimer->start();
 }
 
 QWidget *MainWindow::buildHeader()
@@ -163,6 +170,11 @@ QWidget *MainWindow::buildHeader()
     layout->addWidget(resetLogoButton);
     connect(changeLogoButton, &QPushButton::clicked, this, &MainWindow::changeLogo);
     connect(resetLogoButton, &QPushButton::clicked, this, &MainWindow::resetLogo);
+
+    auto *dashboardButton = new QPushButton(tr("Tableau de bord"), card);
+    dashboardButton->setProperty("variant", QStringLiteral("teal"));
+    layout->addWidget(dashboardButton);
+    connect(dashboardButton, &QPushButton::clicked, this, &MainWindow::openDashboard);
 
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
@@ -407,6 +419,8 @@ void MainWindow::refresh()
     m_statEmp->setText(tr("Employés : %1").arg(employees));
     m_statStu->setText(tr("Élèves : %1").arg(students));
     applySearch();
+    if (m_dashboard && m_dashboard->isVisible())
+        m_dashboard->setSnapshot(buildSnapshot());
 }
 
 void MainWindow::applySearch()
@@ -731,4 +745,42 @@ void MainWindow::refreshLogo()
     m_logoLabel->setPixmap(Logo::pixmap(56));
     qApp->setWindowIcon(Logo::icon());
     setWindowIcon(Logo::icon());
+}
+
+Dashboard::Snapshot MainWindow::buildSnapshot() const
+{
+    const QLocale french(QLocale::French);
+    const QString title = tr("%1 — %2 %3")
+                              .arg(kindDef(m_kind).plural, french.monthName(selectedMonth()),
+                                   QString::number(selectedYear()));
+    return Dashboard::compute(m_all, m_kind, m_marks, selectedYear(), selectedMonth(), m_restMask,
+                              QDate::currentDate(), title);
+}
+
+void MainWindow::openDashboard()
+{
+    if (!m_dashboard)
+        m_dashboard = new DashboardDialog(this);
+    m_dashboard->setSnapshot(buildSnapshot());
+    m_dashboard->show();
+    m_dashboard->raise();
+    m_dashboard->activateWindow();
+}
+
+void MainWindow::liveUpdate()
+{
+    if (!m_dashboard || !m_dashboard->isVisible())
+        return;
+
+    std::vector<CloudPerson> all;
+    QHash<QString, CloudMarks> marks;
+    int restMask = m_restMask;
+    if (!m_store.fetchPeople(all) || !m_store.fetchMarks(selectedYear(), selectedMonth(), marks)
+        || !m_store.fetchRestMask(restMask)) {
+        return;
+    }
+    m_all = all;
+    m_marks = marks;
+    m_restMask = restMask;
+    m_dashboard->setSnapshot(buildSnapshot());
 }
