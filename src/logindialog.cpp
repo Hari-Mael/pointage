@@ -38,8 +38,8 @@ QPushButton *makeButton(const QString &text, const QString &name, QWidget *paren
 
 }
 
-LoginDialog::LoginDialog(Database &db, const QString &dataDir, QWidget *parent)
-    : QDialog(parent), m_db(db), m_dataDir(dataDir)
+LoginDialog::LoginDialog(const QString &dataDir, QWidget *parent)
+    : QDialog(parent), m_dataDir(dataDir)
 {
     setObjectName(QStringLiteral("loginDialog"));
     setWindowTitle(tr("Pointage"));
@@ -130,27 +130,9 @@ LoginDialog::LoginDialog(Database &db, const QString &dataDir, QWidget *parent)
     layout->addWidget(card);
 }
 
-bool LoginDialog::mirrorUser(const SupabaseSession &session)
-{
-    const QString email = session.email.toLower();
-    auto local = m_db.findUser(email);
-    if (!local) {
-        m_db.createUser(email, session.name.isEmpty() ? email : session.name,
-                        QStringLiteral("supabase:%1").arg(session.userId));
-        local = m_db.findUser(email);
-    }
-    if (!local)
-        return false;
-    m_user = *local;
-    return true;
-}
-
 bool LoginDialog::acceptSession(const SupabaseSession &session, bool remember)
 {
-    if (!mirrorUser(session)) {
-        QMessageBox::warning(this, windowTitle(), tr("Impossible d'ouvrir le compte local."));
-        return false;
-    }
+    m_session = session;
     if (remember)
         SecretStore::save(m_dataDir, session.refreshToken);
     else
@@ -170,8 +152,7 @@ bool LoginDialog::restoreSession()
         SecretStore::clear(m_dataDir);
         return false;
     }
-    if (!mirrorUser(session))
-        return false;
+    m_session = session;
     SecretStore::save(m_dataDir, session.refreshToken);
     return true;
 }
