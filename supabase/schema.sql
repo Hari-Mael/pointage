@@ -12,7 +12,7 @@ create table if not exists public.persons (
 create table if not exists public.marks (
   person_id uuid not null references public.persons(id) on delete cascade,
   day date not null,
-  status char(1) not null check (status in ('P', 'A')),
+  status char(1) not null check (status in ('P', 'A', 'R')),
   primary key (person_id, day)
 );
 
