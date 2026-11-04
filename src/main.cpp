@@ -7,6 +7,7 @@
 #include "cloudstore.h"
 #include "logger.h"
 #include "logindialog.h"
+#include "logo.h"
 #include "mainwindow.h"
 #include "secretstore.h"
 #include "theme.h"
@@ -64,6 +65,7 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName(QStringLiteral("Hari-Mael"));
     QApplication::setApplicationVersion(QStringLiteral(POINTAGE_VERSION));
     applyTheme(app);
+    app.setWindowIcon(Logo::icon());
 
     const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dataDir);
