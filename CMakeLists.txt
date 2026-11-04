@@ -15,7 +15,6 @@ add_executable(pointage
     src/auth.h
     src/auth.cpp
     src/database.h
-    src/database.cpp
     src/fields.h
     src/fields.cpp
     src/logindialog.h
@@ -33,6 +32,8 @@ add_executable(pointage
     src/supabaseauth.cpp
     src/secretstore.h
     src/secretstore.cpp
+    src/cloudstore.h
+    src/cloudstore.cpp
 )
 
 target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network)
