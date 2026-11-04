@@ -9,30 +9,38 @@
 #include "logger.h"
 #include "logindialog.h"
 #include "mainwindow.h"
+#include "secretstore.h"
 #include "theme.h"
 
 namespace {
 
-void showLogin(Database &db);
+void showLogin(Database &db, const QString &dataDir);
 
-void openMainWindow(Database &db, const UserRecord &user)
+void openMainWindow(Database &db, const QString &dataDir, const UserRecord &user)
 {
     qInfo() << "Connexion de" << user.email;
     auto *window = new MainWindow(db, user);
     window->setAttribute(Qt::WA_DeleteOnClose);
-    QObject::connect(window, &MainWindow::logoutRequested, window, [&db, window]() {
+    QObject::connect(window, &MainWindow::logoutRequested, window, [&db, dataDir, window]() {
         qInfo() << "Déconnexion";
-        showLogin(db);
+        SecretStore::clear(dataDir);
+        showLogin(db, dataDir);
         window->close();
     });
     window->show();
 }
 
-void showLogin(Database &db)
+void showLogin(Database &db, const QString &dataDir)
 {
-    auto *login = new LoginDialog(db);
-    QObject::connect(login, &QDialog::accepted, login, [&db, login]() {
-        openMainWindow(db, login->user());
+    auto *login = new LoginDialog(db, dataDir);
+    if (login->restoreSession()) {
+        const UserRecord user = login->user();
+        login->deleteLater();
+        openMainWindow(db, dataDir, user);
+        return;
+    }
+    QObject::connect(login, &QDialog::accepted, login, [&db, dataDir, login]() {
+        openMainWindow(db, dataDir, login->user());
     });
     QObject::connect(login, &QDialog::finished, login, &QObject::deleteLater);
     QObject::connect(login, &QDialog::rejected, qApp, &QCoreApplication::quit);
@@ -69,7 +77,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    showLogin(db);
+    showLogin(db, dataDir);
     const int code = app.exec();
     qInfo() << "Arrêt Pointage" << code;
     return code;
