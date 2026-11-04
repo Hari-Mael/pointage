@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 
 #include "fields.h"
+#include "logo.h"
 #include "secretstore.h"
 
 namespace {
@@ -51,7 +52,8 @@ LoginDialog::LoginDialog(const QString &dataDir, QWidget *parent)
     cardLayout->setContentsMargins(30, 30, 30, 30);
     cardLayout->setSpacing(14);
 
-    auto *icon = new QLabel(QStringLiteral("🔐"), card);
+    auto *icon = new QLabel(card);
+    icon->setPixmap(Logo::pixmap(60));
     icon->setObjectName(QStringLiteral("iconCircle"));
     icon->setAlignment(Qt::AlignCenter);
     icon->setFixedSize(72, 72);
