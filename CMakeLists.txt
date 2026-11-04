@@ -11,7 +11,17 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Test)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Charts Test GuiPrivate)
+
+include(FetchContent)
+set(QXLSX_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    QXlsx
+    GIT_REPOSITORY https://github.com/QtExcel/QXlsx.git
+    GIT_TAG v1.5.1.1
+    SOURCE_SUBDIR QXlsx
+)
+FetchContent_MakeAvailable(QXlsx)
 
 add_executable(pointage
     src/main.cpp
@@ -47,6 +57,12 @@ add_executable(pointage
     src/privacynotice.cpp
     src/logo.h
     src/logo.cpp
+    src/dashboard.h
+    src/dashboard.cpp
+    src/excelreport.h
+    src/excelreport.cpp
+    src/dashboarddialog.h
+    src/dashboarddialog.cpp
     resources/resources.qrc
 )
 
@@ -54,15 +70,12 @@ if(WIN32)
     target_sources(pointage PRIVATE resources/app.rc)
 endif()
 
-target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network)
+target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network Qt6::Charts QXlsx::QXlsx)
 if(WIN32)
     target_link_libraries(pointage PRIVATE Crypt32)
-endif()
-target_compile_definitions(pointage PRIVATE POINTAGE_VERSION="${PROJECT_VERSION}")
-
-if(WIN32)
     set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
+target_compile_definitions(pointage PRIVATE POINTAGE_VERSION="${PROJECT_VERSION}")
 
 enable_testing()
 
@@ -92,3 +105,14 @@ add_executable(tst_reports
 target_include_directories(tst_reports PRIVATE src)
 target_link_libraries(tst_reports PRIVATE Qt6::Test Qt6::Network)
 add_test(NAME reports COMMAND tst_reports)
+
+add_executable(tst_dashboard
+    tests/tst_dashboard.cpp
+    src/dashboard.cpp
+    src/excelreport.cpp
+    src/reports.cpp
+    src/fields.cpp
+)
+target_include_directories(tst_dashboard PRIVATE src)
+target_link_libraries(tst_dashboard PRIVATE Qt6::Test Qt6::Network QXlsx::QXlsx)
+add_test(NAME dashboard COMMAND tst_dashboard)
