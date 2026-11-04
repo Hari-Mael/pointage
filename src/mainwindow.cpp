@@ -12,7 +12,10 @@
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QVBoxLayout>
+#include <QFileDialog>
 
+#include "exporter.h"
+#include "privacynotice.h"
 #include "fields.h"
 #include "persondialog.h"
 #include "presencedialog.h"
