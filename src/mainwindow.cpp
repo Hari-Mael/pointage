@@ -44,15 +44,35 @@ QFrame *makeCard(QWidget *parent)
     return card;
 }
 
+QString nextCodeFor(const std::vector<CloudPerson> &people, int kind, QChar prefix)
+{
+    int highest = 0;
+    for (const CloudPerson &person : people) {
+        if (person.kind != kind || !person.code.startsWith(prefix))
+            continue;
+        bool ok = false;
+        const int number = person.code.mid(1).toInt(&ok);
+        if (ok && number > highest)
+            highest = number;
+    }
+    return QStringLiteral("%1%2").arg(prefix).arg(highest + 1, 3, 10, QLatin1Char('0'));
 }
 
-MainWindow::MainWindow(Database &db, const UserRecord &user, QWidget *parent)
-    : QMainWindow(parent), m_db(db), m_user(user)
+}
+
+MainWindow::MainWindow(CloudStore &store, const QString &userName, const QString &userEmail, QWidget *parent)
+    : QMainWindow(parent), m_store(store), m_userName(userName), m_userEmail(userEmail)
 {
-    setWindowTitle(tr("Feuille de Pointage Pro — %1").arg(user.name));
+    setWindowTitle(tr("Feuille de Pointage Pro — %1").arg(userName));
     resize(1180, 820);
     buildUi();
     refresh();
+}
+
+void MainWindow::reportWriteResult(bool ok, const QString &action)
+{
+    if (!ok)
+        QMessageBox::warning(this, windowTitle(), tr("%1 impossible : %2").arg(action, m_store.lastError()));
 }
 
 void MainWindow::buildUi()
@@ -81,7 +101,7 @@ QWidget *MainWindow::buildHeader()
     auto *titles = new QVBoxLayout;
     auto *title = new QLabel(QStringLiteral("📋 Feuille de Pointage Pro"), card);
     title->setObjectName(QStringLiteral("title"));
-    auto *subtitle = new QLabel(QStringLiteral("%1 · %2").arg(m_user.name, m_user.email), card);
+    auto *subtitle = new QLabel(QStringLiteral("%1 · %2").arg(m_userName, m_userEmail), card);
     subtitle->setObjectName(QStringLiteral("subtitle"));
     titles->addWidget(title);
     titles->addWidget(subtitle);
@@ -243,16 +263,29 @@ void MainWindow::refresh()
     const int actionsCol = absentCol + 1;
     const QLocale french(QLocale::French);
 
-    const size_t employees = m_db.persons(m_user.id, kKindEmployee).size();
-    const size_t students = m_db.persons(m_user.id, kKindStudent).size();
-    m_people = m_db.persons(m_user.id, m_kind);
+    if (!m_store.fetchPeople(m_all) || !m_store.fetchMarks(year, month, m_marks)
+        || !m_store.fetchRestMask(m_restMask)) {
+        QMessageBox::warning(this, windowTitle(), tr("Lecture des données impossible : %1").arg(m_store.lastError()));
+    }
+
+    size_t employees = 0;
+    size_t students = 0;
+    m_people.clear();
+    for (const CloudPerson &person : m_all) {
+        if (person.kind == kKindEmployee)
+            ++employees;
+        else
+            ++students;
+        if (person.kind == m_kind)
+            m_people.push_back(person);
+    }
 
     m_tabEmp->setText(tr("Employés (%1)").arg(employees));
     m_tabStu->setText(tr("Élèves (%1)").arg(students));
     m_tabEmp->setChecked(m_kind == kKindEmployee);
     m_tabStu->setChecked(m_kind == kKindStudent);
     for (int dow = 0; dow < 7; ++dow)
-        m_chips[static_cast<size_t>(dow)]->setChecked((m_user.restMask >> dow) & 1);
+        m_chips[static_cast<size_t>(dow)]->setChecked((m_restMask >> dow) & 1);
 
     m_table->setRowCount(0);
     m_table->setColumnCount(actionsCol + 1);
@@ -280,8 +313,8 @@ void MainWindow::refresh()
     int totalPresent = 0;
     int totalAbsent = 0;
     for (int row = 0; row < rowCount; ++row) {
-        const PersonRecord &person = m_people[static_cast<size_t>(row)];
-        const MarkMap marks = m_db.marks(person.id, year, month);
+        const CloudPerson &person = m_people[static_cast<size_t>(row)];
+        const CloudMarks marks = m_marks.value(person.id);
         int present = 0;
         int absent = 0;
 
@@ -358,7 +391,7 @@ void MainWindow::onCellClicked(int row, int column)
     if (!idItem || !cell)
         return;
 
-    const int personId = idItem->data(Qt::UserRole).toInt();
+    const QString personId = idItem->data(Qt::UserRole).toString();
     const QString current = cell->text();
 
     QChar next;
@@ -367,11 +400,11 @@ void MainWindow::onCellClicked(int row, int column)
     else if (current == QLatin1String("P"))
         next = QChar('A');
 
-    m_db.setMark(personId, date, next);
+    reportWriteResult(m_store.setMark(personId, date, next), tr("Enregistrement"));
     refresh();
 }
 
-QWidget *MainWindow::makeActionWidget(int personId)
+QWidget *MainWindow::makeActionWidget(const QString &personId)
 {
     auto *box = new QWidget;
     auto *layout = new QHBoxLayout(box);
@@ -397,9 +430,9 @@ QWidget *MainWindow::makeActionWidget(int personId)
     return box;
 }
 
-const PersonRecord *MainWindow::findPerson(int personId) const
+const CloudPerson *MainWindow::findPerson(const QString &personId) const
 {
-    for (const PersonRecord &person : m_people) {
+    for (const CloudPerson &person : m_people) {
         if (person.id == personId)
             return &person;
     }
@@ -414,8 +447,8 @@ void MainWindow::setKind(int kind)
 
 void MainWindow::toggleRestDay(int dayOfWeek)
 {
-    m_user.restMask ^= (1 << dayOfWeek);
-    m_db.setRestMask(m_user.id, m_user.restMask);
+    const int mask = m_restMask ^ (1 << dayOfWeek);
+    reportWriteResult(m_store.setRestMask(mask), tr("Enregistrement des jours de repos"));
     refresh();
 }
 
@@ -423,27 +456,34 @@ void MainWindow::addPerson()
 {
     const KindDef &def = kindDef(m_kind);
     QStringList codes;
-    for (const PersonRecord &person : m_people)
-        codes << person.code;
+    for (const CloudPerson &person : m_all) {
+        if (person.kind == m_kind)
+            codes << person.code;
+    }
 
-    PersonDialog dialog(m_kind, m_db.nextCode(m_user.id, m_kind, def.prefix), codes, this);
+    PersonDialog dialog(m_kind, nextCodeFor(m_all, m_kind, def.prefix), codes, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
-    if (!m_db.addPerson(m_user.id, m_kind, dialog.person()))
-        QMessageBox::critical(this, windowTitle(), tr("Impossible d'enregistrer la fiche (identifiant déjà utilisé ?)."));
+    const PersonRecord created = dialog.person();
+    CloudPerson person;
+    person.kind = m_kind;
+    person.code = created.code;
+    person.name = created.name;
+    person.fields = created.fields;
+    reportWriteResult(m_store.addPerson(person), tr("Ajout de la fiche"));
     refresh();
 }
 
-void MainWindow::insertPresence(int personId)
+void MainWindow::insertPresence(const QString &personId)
 {
-    const PersonRecord *person = findPerson(personId);
+    const CloudPerson *person = findPerson(personId);
     if (!person)
         return;
 
     const int year = selectedYear();
     const int month = selectedMonth();
-    const MarkMap existing = m_db.marks(personId, year, month);
+    const CloudMarks existing = m_marks.value(personId);
 
     PresenceDialog dialog(PresenceDialog::Mode::Insert, person->name, year, month, existing, this);
     if (dialog.exec() != QDialog::Accepted)
@@ -451,46 +491,49 @@ void MainWindow::insertPresence(int personId)
 
     int added = 0;
     int skipped = 0;
+    int failed = 0;
     for (const QDate &date : dialog.dates()) {
         if (isRestDay(date) || existing.contains(date.day())) {
             ++skipped;
             continue;
         }
-        m_db.setMark(personId, date, dialog.status());
-        ++added;
+        if (m_store.setMark(personId, date, dialog.status()))
+            ++added;
+        else
+            ++failed;
     }
     refresh();
+    if (failed > 0)
+        QMessageBox::warning(this, windowTitle(), tr("%1 case(s) non enregistrée(s) : %2").arg(failed).arg(m_store.lastError()));
     QMessageBox::information(this, windowTitle(),
                              tr("%1 case(s) ajoutée(s), %2 ignorée(s) (repos ou déjà pointées).").arg(added).arg(skipped));
 }
 
-void MainWindow::modifyPresence(int personId)
+void MainWindow::modifyPresence(const QString &personId)
 {
-    const PersonRecord *person = findPerson(personId);
+    const CloudPerson *person = findPerson(personId);
     if (!person)
         return;
 
-    const int year = selectedYear();
-    const int month = selectedMonth();
-    const MarkMap marks = m_db.marks(personId, year, month);
+    const CloudMarks marks = m_marks.value(personId);
     if (marks.isEmpty()) {
         QMessageBox::information(this, windowTitle(),
                                  tr("Aucune case pointée ce mois-ci pour %1.").arg(person->name));
         return;
     }
 
-    PresenceDialog dialog(PresenceDialog::Mode::Modify, person->name, year, month, marks, this);
+    PresenceDialog dialog(PresenceDialog::Mode::Modify, person->name, selectedYear(), selectedMonth(), marks, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
     const QDate date = dialog.dates().first();
-    m_db.setMark(personId, date, dialog.status());
+    reportWriteResult(m_store.setMark(personId, date, dialog.status()), tr("Modification"));
     refresh();
 }
 
-void MainWindow::deletePerson(int personId)
+void MainWindow::deletePerson(const QString &personId)
 {
-    const PersonRecord *person = findPerson(personId);
+    const CloudPerson *person = findPerson(personId);
     if (!person)
         return;
 
@@ -521,8 +564,8 @@ void MainWindow::deletePerson(int personId)
         return;
 
     if (clearOnly)
-        m_db.clearMarks(personId);
+        reportWriteResult(m_store.clearMarks(personId), tr("Effacement de l'historique"));
     else
-        m_db.deletePerson(personId);
+        reportWriteResult(m_store.deletePerson(personId), tr("Suppression"));
     refresh();
 }
