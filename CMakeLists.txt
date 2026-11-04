@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Test)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Test)
 
 add_executable(pointage
     src/main.cpp
@@ -28,9 +28,17 @@ add_executable(pointage
     src/presencedialog.cpp
     src/logger.h
     src/logger.cpp
+    src/config.h
+    src/supabaseauth.h
+    src/supabaseauth.cpp
+    src/secretstore.h
+    src/secretstore.cpp
 )
 
-target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql)
+target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network)
+if(WIN32)
+    target_link_libraries(pointage PRIVATE Crypt32)
+endif()
 target_compile_definitions(pointage PRIVATE POINTAGE_VERSION="${PROJECT_VERSION}")
 
 if(WIN32)
