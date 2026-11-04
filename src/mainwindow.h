@@ -4,14 +4,18 @@
 #include <QDate>
 #include <QHash>
 #include <QMainWindow>
+#include <QPointer>
 #include <QSpinBox>
 #include <array>
 #include <vector>
 
 #include "cloudstore.h"
+#include "dashboard.h"
 #include "reports.h"
 
+class DashboardDialog;
 class QLabel;
+class QTimer;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
@@ -40,6 +44,8 @@ private slots:
     void exportRate(const QString &personId, Reports::Rate rate);
     void changeLogo();
     void resetLogo();
+    void openDashboard();
+    void liveUpdate();
 
 private:
     void buildUi();
@@ -53,6 +59,7 @@ private:
     void reportWriteResult(bool ok, const QString &action);
     void saveReport(const QString &defaultName, const QString &content);
     void refreshLogo();
+    Dashboard::Snapshot buildSnapshot() const;
 
     int selectedYear() const { return m_yearBox->value(); }
     int selectedMonth() const { return m_monthBox->currentIndex() + 1; }
@@ -67,6 +74,8 @@ private:
     std::vector<CloudPerson> m_people;
     QHash<QString, CloudMarks> m_marks;
     QLabel *m_logoLabel = nullptr;
+    QPointer<DashboardDialog> m_dashboard;
+    QTimer *m_liveTimer = nullptr;
     QComboBox *m_monthBox = nullptr;
     QSpinBox *m_yearBox = nullptr;
     QLineEdit *m_search = nullptr;
