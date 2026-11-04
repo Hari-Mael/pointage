@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
 if(MSVC)
     add_compile_options(/utf-8)
@@ -44,7 +45,14 @@ add_executable(pointage
     src/reports.cpp
     src/privacynotice.h
     src/privacynotice.cpp
+    src/logo.h
+    src/logo.cpp
+    resources/resources.qrc
 )
+
+if(WIN32)
+    target_sources(pointage PRIVATE resources/app.rc)
+endif()
 
 target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network)
 if(WIN32)
