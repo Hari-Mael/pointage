@@ -11,6 +11,7 @@
 #include "cloudstore.h"
 #include "reports.h"
 
+class QLabel;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
@@ -37,6 +38,8 @@ private slots:
     void exportRoster();
     void exportMonthly(const QString &personId);
     void exportRate(const QString &personId, Reports::Rate rate);
+    void changeLogo();
+    void resetLogo();
 
 private:
     void buildUi();
@@ -49,6 +52,7 @@ private:
     const CloudPerson *findPerson(const QString &personId) const;
     void reportWriteResult(bool ok, const QString &action);
     void saveReport(const QString &defaultName, const QString &content);
+    void refreshLogo();
 
     int selectedYear() const { return m_yearBox->value(); }
     int selectedMonth() const { return m_monthBox->currentIndex() + 1; }
@@ -62,6 +66,7 @@ private:
     std::vector<CloudPerson> m_all;
     std::vector<CloudPerson> m_people;
     QHash<QString, CloudMarks> m_marks;
+    QLabel *m_logoLabel = nullptr;
     QComboBox *m_monthBox = nullptr;
     QSpinBox *m_yearBox = nullptr;
     QLineEdit *m_search = nullptr;
