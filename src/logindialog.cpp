@@ -1,9 +1,10 @@
 #include "logindialog.h"
 
-#include <QDateTime>
+#include <QCheckBox>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -11,14 +12,12 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
-#include "auth.h"
 #include "fields.h"
+#include "secretstore.h"
 
 namespace {
 
 constexpr int kMinPasswordLength = 8;
-constexpr int kMaxFailedLogins = 5;
-constexpr qint64 kLockSeconds = 15 * 60;
 
 QLineEdit *makeField(const QString &placeholder, bool password, QWidget *parent)
 {
@@ -39,12 +38,12 @@ QPushButton *makeButton(const QString &text, const QString &name, QWidget *paren
 
 }
 
-LoginDialog::LoginDialog(Database &db, QWidget *parent)
-    : QDialog(parent), m_db(db)
+LoginDialog::LoginDialog(Database &db, const QString &dataDir, QWidget *parent)
+    : QDialog(parent), m_db(db), m_dataDir(dataDir)
 {
     setObjectName(QStringLiteral("loginDialog"));
     setWindowTitle(tr("Pointage"));
-    resize(420, 600);
+    resize(420, 640);
 
     auto *card = new QFrame(this);
     card->setObjectName(QStringLiteral("loginCard"));
@@ -72,25 +71,32 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent)
     cardLayout->addWidget(subtitle);
     cardLayout->addSpacing(8);
 
-    auto *stack = new QStackedWidget(card);
+    m_stack = new QStackedWidget(card);
 
-    auto *loginPage = new QWidget(stack);
+    auto *loginPage = new QWidget(m_stack);
     auto *loginLayout = new QVBoxLayout(loginPage);
     loginLayout->setContentsMargins(0, 0, 0, 0);
     loginLayout->setSpacing(14);
     m_loginEmail = makeField(tr("Adresse email"), false, loginPage);
     m_loginPassword = makeField(tr("Mot de passe"), true, loginPage);
+    m_rememberMe = new QCheckBox(tr("Se souvenir de moi"), loginPage);
+    auto *forgot = makeButton(tr("Mot de passe oublié ?"), QStringLiteral("linkButton"), loginPage);
+    auto *optionsRow = new QHBoxLayout;
+    optionsRow->addWidget(m_rememberMe);
+    optionsRow->addStretch(1);
+    optionsRow->addWidget(forgot);
     auto *loginButton = makeButton(tr("CONNEXION"), QStringLiteral("embossButton"), loginPage);
     auto *toRegister = makeButton(tr("Pas encore de compte ? Créer un compte"), QStringLiteral("linkButton"), loginPage);
     loginLayout->addWidget(m_loginEmail);
     loginLayout->addWidget(m_loginPassword);
+    loginLayout->addLayout(optionsRow);
     loginLayout->addSpacing(6);
     loginLayout->addWidget(loginButton);
     loginLayout->addWidget(toRegister, 0, Qt::AlignCenter);
     loginLayout->addStretch(1);
-    stack->addWidget(loginPage);
+    m_stack->addWidget(loginPage);
 
-    auto *registerPage = new QWidget(stack);
+    auto *registerPage = new QWidget(m_stack);
     auto *registerLayout = new QVBoxLayout(registerPage);
     registerLayout->setContentsMargins(0, 0, 0, 0);
     registerLayout->setSpacing(14);
@@ -108,50 +114,81 @@ LoginDialog::LoginDialog(Database &db, QWidget *parent)
     registerLayout->addWidget(registerButton);
     registerLayout->addWidget(toLogin, 0, Qt::AlignCenter);
     registerLayout->addStretch(1);
-    stack->addWidget(registerPage);
+    m_stack->addWidget(registerPage);
 
-    cardLayout->addWidget(stack, 1);
+    cardLayout->addWidget(m_stack, 1);
 
     connect(loginButton, &QPushButton::clicked, this, &LoginDialog::tryLogin);
     connect(m_loginPassword, &QLineEdit::returnPressed, this, &LoginDialog::tryLogin);
+    connect(forgot, &QPushButton::clicked, this, &LoginDialog::forgotPassword);
     connect(registerButton, &QPushButton::clicked, this, &LoginDialog::tryRegister);
-    connect(toRegister, &QPushButton::clicked, this, [stack]() { stack->setCurrentIndex(1); });
-    connect(toLogin, &QPushButton::clicked, this, [stack]() { stack->setCurrentIndex(0); });
+    connect(toRegister, &QPushButton::clicked, this, [this]() { m_stack->setCurrentIndex(1); });
+    connect(toLogin, &QPushButton::clicked, this, [this]() { m_stack->setCurrentIndex(0); });
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(20, 20, 20, 20);
     layout->addWidget(card);
 }
 
+bool LoginDialog::mirrorUser(const SupabaseSession &session)
+{
+    const QString email = session.email.toLower();
+    auto local = m_db.findUser(email);
+    if (!local) {
+        m_db.createUser(email, session.name.isEmpty() ? email : session.name,
+                        QStringLiteral("supabase:%1").arg(session.userId));
+        local = m_db.findUser(email);
+    }
+    if (!local)
+        return false;
+    m_user = *local;
+    return true;
+}
+
+bool LoginDialog::acceptSession(const SupabaseSession &session, bool remember)
+{
+    if (!mirrorUser(session)) {
+        QMessageBox::warning(this, windowTitle(), tr("Impossible d'ouvrir le compte local."));
+        return false;
+    }
+    if (remember)
+        SecretStore::save(m_dataDir, session.refreshToken);
+    else
+        SecretStore::clear(m_dataDir);
+    return true;
+}
+
+bool LoginDialog::restoreSession()
+{
+    const QString refreshToken = SecretStore::load(m_dataDir);
+    if (refreshToken.isEmpty())
+        return false;
+
+    SupabaseSession session;
+    QString error;
+    if (!m_auth.refresh(refreshToken, session, error)) {
+        SecretStore::clear(m_dataDir);
+        return false;
+    }
+    if (!mirrorUser(session))
+        return false;
+    SecretStore::save(m_dataDir, session.refreshToken);
+    return true;
+}
+
 void LoginDialog::tryLogin()
 {
     const QString email = m_loginEmail->text().trimmed().toLower();
-    const auto user = m_db.findUser(email);
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
-
-    if (user && user->lockedUntil > now) {
-        const qint64 minutes = (user->lockedUntil - now + 59) / 60;
+    SupabaseSession session;
+    QString error;
+    if (!m_auth.signIn(email, m_loginPassword->text(), session, error)) {
         QMessageBox::warning(this, windowTitle(),
-                             tr("Compte verrouillé après trop d'échecs. Réessayez dans %1 minute(s).").arg(minutes));
-        return;
-    }
-
-    if (!user || !Auth::verifyPassword(m_loginPassword->text(), user->passwordHash)) {
-        if (user) {
-            const int failed = user->failedLogins + 1;
-            if (failed >= kMaxFailedLogins)
-                m_db.recordFailedLogin(user->id, 0, now + kLockSeconds);
-            else
-                m_db.recordFailedLogin(user->id, failed, 0);
-        }
-        QMessageBox::warning(this, windowTitle(), tr("Email ou mot de passe incorrect."));
+                             error.isEmpty() ? tr("Email ou mot de passe incorrect.") : error);
         m_loginPassword->clear();
         return;
     }
-
-    m_db.resetFailedLogins(user->id);
-    m_user = *user;
-    accept();
+    if (acceptSession(session, m_rememberMe->isChecked()))
+        accept();
 }
 
 void LoginDialog::tryRegister()
@@ -176,18 +213,42 @@ void LoginDialog::tryRegister()
         QMessageBox::warning(this, windowTitle(), tr("Les mots de passe ne correspondent pas."));
         return;
     }
-    if (m_db.findUser(email)) {
-        QMessageBox::warning(this, windowTitle(), tr("Cet email est déjà utilisé."));
-        return;
-    }
-    if (!m_db.createUser(email, name, Auth::hashPassword(password))) {
-        QMessageBox::warning(this, windowTitle(), tr("Impossible de créer le compte."));
-        return;
-    }
 
-    const auto user = m_db.findUser(email);
-    if (!user)
+    SupabaseSession session;
+    QString error;
+    if (!m_auth.signUp(email, password, name, session, error)) {
+        QMessageBox::warning(this, windowTitle(), error.isEmpty() ? tr("Impossible de créer le compte.") : error);
         return;
-    m_user = *user;
-    accept();
+    }
+    if (session.accessToken.isEmpty()) {
+        QMessageBox::information(this, windowTitle(),
+                                 tr("Compte créé. Ouvrez le lien reçu par email pour le confirmer, puis connectez-vous."));
+        m_stack->setCurrentIndex(0);
+        return;
+    }
+    if (acceptSession(session, false))
+        accept();
+}
+
+void LoginDialog::forgotPassword()
+{
+    bool ok = false;
+    const QString email = QInputDialog::getText(this, tr("Mot de passe oublié"),
+                                                tr("Adresse email du compte :"), QLineEdit::Normal,
+                                                m_loginEmail->text().trimmed(), &ok)
+                              .trimmed()
+                              .toLower();
+    if (!ok || email.isEmpty())
+        return;
+    if (!isValidEmail(email)) {
+        QMessageBox::warning(this, windowTitle(), tr("Email invalide."));
+        return;
+    }
+    QString error;
+    if (!m_auth.sendPasswordReset(email, error)) {
+        QMessageBox::warning(this, windowTitle(), error);
+        return;
+    }
+    QMessageBox::information(this, windowTitle(),
+                             tr("Si un compte existe pour %1, un email de réinitialisation vient d'être envoyé.").arg(email));
 }
