@@ -2,7 +2,6 @@
 
 #include <QDialog>
 
-#include "database.h"
 #include "supabaseauth.h"
 
 class QCheckBox;
@@ -12,8 +11,8 @@ class QStackedWidget;
 class LoginDialog : public QDialog {
     Q_OBJECT
 public:
-    LoginDialog(Database &db, const QString &dataDir, QWidget *parent = nullptr);
-    UserRecord user() const { return m_user; }
+    explicit LoginDialog(const QString &dataDir, QWidget *parent = nullptr);
+    SupabaseSession session() const { return m_session; }
     bool restoreSession();
 
 private slots:
@@ -23,12 +22,10 @@ private slots:
 
 private:
     bool acceptSession(const SupabaseSession &session, bool remember);
-    bool mirrorUser(const SupabaseSession &session);
 
-    Database &m_db;
     QString m_dataDir;
     SupabaseAuth m_auth;
-    UserRecord m_user;
+    SupabaseSession m_session;
     QStackedWidget *m_stack = nullptr;
     QLineEdit *m_loginEmail = nullptr;
     QLineEdit *m_loginPassword = nullptr;
