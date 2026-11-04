@@ -1,24 +1,27 @@
 #include "mainwindow.h"
 
+#include <QColor>
 #include <QComboBox>
+#include <QFile>
+#include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLocale>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QVBoxLayout>
-#include <QFileDialog>
 
 #include "exporter.h"
-#include "privacynotice.h"
 #include "fields.h"
 #include "persondialog.h"
 #include "presencedialog.h"
+#include "privacynotice.h"
 
 namespace {
 
@@ -27,7 +30,7 @@ constexpr int kColId = 1;
 constexpr int kColName = 2;
 constexpr int kColFirstDay = 3;
 constexpr int kDayColumnWidth = 36;
-constexpr int kActionsColumnWidth = 270;
+constexpr int kActionsColumnWidth = 380;
 constexpr int kRowHeight = 40;
 
 const char *const kDayShort[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
@@ -76,6 +79,19 @@ void MainWindow::reportWriteResult(bool ok, const QString &action)
 {
     if (!ok)
         QMessageBox::warning(this, windowTitle(), tr("%1 impossible : %2").arg(action, m_store.lastError()));
+}
+
+void MainWindow::saveReport(const QString &defaultName, const QString &content)
+{
+    const QString path = QFileDialog::getSaveFileName(this, tr("Enregistrer en CSV (Excel)"), defaultName,
+                                                      tr("Fichiers CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (Exporter::writeCsv(path, content, error))
+        QMessageBox::information(this, windowTitle(), tr("Fichier enregistré : %1").arg(path));
+    else
+        QMessageBox::warning(this, windowTitle(), tr("Enregistrement impossible : %1").arg(error));
 }
 
 void MainWindow::buildUi()
@@ -129,32 +145,16 @@ QWidget *MainWindow::buildHeader()
     layout->addWidget(monthLabel);
     layout->addWidget(m_monthBox);
     layout->addWidget(m_yearBox);
-    layout->addWidget(logout);   
-    auto *exportButton = new QPushButton(tr("Exporter CSV"), card);
-    exportButton->setProperty("variant", QStringLiteral("ghost"));
-    auto *privacyButton = new QPushButton(tr("Confidentialité"), card);
-    privacyButton->setProperty("variant", QStringLiteral("ghost"));
-    layout->addWidget(exportButton);
-    layout->addWidget(privacyButton);
-    connect(exportButton, &QPushButton::clicked, this, [this]() {
-        const QString path = QFileDialog::getSaveFileName(
-            this, tr("Exporter en CSV"),
-            QStringLiteral("pointage_%1_%2.csv").arg(selectedYear()).arg(selectedMonth(), 2, 10, QLatin1Char('0')),
-            tr("Fichiers CSV (*.csv)"));
-        if (path.isEmpty())
-            return;
-        const QString csv = Exporter::buildCsv(m_all, m_marks, m_kind, selectedYear(), selectedMonth());
-        QString error;
-        if (Exporter::writeCsv(path, csv, error))
-            QMessageBox::information(this, windowTitle(), tr("Export enregistré : %1").arg(path));
-        else
-            QMessageBox::warning(this, windowTitle(), tr("Export impossible : %1").arg(error));
-    });
-    connect(privacyButton, &QPushButton::clicked, this, [this]() { showPrivacyNotice(this); });
+    layout->addWidget(logout);
 
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
     connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
+
+    auto *privacyButton = new QPushButton(tr("Confidentialité"), card);
+    privacyButton->setProperty("variant", QStringLiteral("ghost"));
+    layout->insertWidget(layout->count() - 1, privacyButton);
+    connect(privacyButton, &QPushButton::clicked, this, [this]() { showPrivacyNotice(this); });
     return card;
 }
 
@@ -223,9 +223,18 @@ QWidget *MainWindow::buildTableCard()
     tabs->addWidget(m_tabEmp);
     tabs->addWidget(m_tabStu);
     tabs->addStretch(1);
+
+    auto *importButton = new QPushButton(tr("Importer Excel"), card);
+    importButton->setProperty("variant", QStringLiteral("ghost"));
+    auto *exportButton = new QPushButton(tr("Exporter Excel"), card);
+    exportButton->setProperty("variant", QStringLiteral("ghost"));
+    tabs->addWidget(importButton);
+    tabs->addWidget(exportButton);
     layout->addLayout(tabs);
     connect(m_tabEmp, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); });
     connect(m_tabStu, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); });
+    connect(importButton, &QPushButton::clicked, this, &MainWindow::importRoster);
+    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportRoster);
 
     m_table = new QTableWidget(card);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -238,7 +247,7 @@ QWidget *MainWindow::buildTableCard()
 
     layout->addWidget(buildStats());
 
-    auto *hint = new QLabel(tr("Cliquez sur une case : vide → P → A → vide"), card);
+    auto *hint = new QLabel(tr("Cliquez sur une case : vide → P → A → R (retard) → vide"), card);
     hint->setObjectName(QStringLiteral("muted"));
     hint->setAlignment(Qt::AlignCenter);
     layout->addWidget(hint);
@@ -282,9 +291,7 @@ void MainWindow::refresh()
     const int year = selectedYear();
     const int month = selectedMonth();
     const int days = QDate(year, month, 1).daysInMonth();
-    const int presentCol = kColFirstDay + days;
-    const int absentCol = presentCol + 1;
-    const int actionsCol = absentCol + 1;
+    const int actionsCol = kColFirstDay + days;
     const QLocale french(QLocale::French);
 
     if (!m_store.fetchPeople(m_all) || !m_store.fetchMarks(year, month, m_marks)
@@ -319,7 +326,7 @@ void MainWindow::refresh()
         const int dow = QDate(year, month, day).dayOfWeek() % 7;
         headers << QStringLiteral("%1\n%2").arg(QString::fromLatin1(kDayShort[dow])).arg(day);
     }
-    headers << tr("P") << tr("A") << tr("Actions");
+    headers << tr("Actions");
     m_table->setHorizontalHeaderLabels(headers);
 
     m_table->horizontalHeader()->setSectionResizeMode(kColCheck, QHeaderView::Fixed);
@@ -328,7 +335,7 @@ void MainWindow::refresh()
     m_table->horizontalHeader()->setSectionResizeMode(kColName, QHeaderView::Stretch);
     m_table->horizontalHeader()->setSectionResizeMode(actionsCol, QHeaderView::Fixed);
     m_table->setColumnWidth(actionsCol, kActionsColumnWidth);
-    for (int col = kColFirstDay; col < presentCol; ++col)
+    for (int col = kColFirstDay; col < actionsCol; ++col)
         m_table->setColumnWidth(col, kDayColumnWidth);
 
     const int rowCount = static_cast<int>(m_people.size());
@@ -339,8 +346,6 @@ void MainWindow::refresh()
     for (int row = 0; row < rowCount; ++row) {
         const CloudPerson &person = m_people[static_cast<size_t>(row)];
         const CloudMarks marks = m_marks.value(person.id);
-        int present = 0;
-        int absent = 0;
 
         auto *check = new QTableWidgetItem;
         check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
@@ -359,25 +364,25 @@ void MainWindow::refresh()
             if (isRestDay(date)) {
                 cell->setBackground(QColor("#dfe4ec"));
             } else if (status == QChar('P')) {
-                ++present;
+                ++totalPresent;
                 cell->setText(QStringLiteral("P"));
                 cell->setForeground(QColor("#1b8a4b"));
                 cell->setBackground(QColor("#dff5e6"));
             } else if (status == QChar('A')) {
-                ++absent;
+                ++totalAbsent;
                 cell->setText(QStringLiteral("A"));
                 cell->setForeground(QColor("#d12f3a"));
                 cell->setBackground(QColor("#fde2e4"));
+            } else if (status == QChar('R')) {
+                ++totalPresent;
+                cell->setText(QStringLiteral("R"));
+                cell->setForeground(QColor("#b7791f"));
+                cell->setBackground(QColor("#fff4d6"));
             }
             m_table->setItem(row, kColFirstDay + day - 1, cell);
         }
 
-        m_table->setItem(row, presentCol, makeItem(QString::number(present)));
-        m_table->setItem(row, absentCol, makeItem(QString::number(absent)));
         m_table->setCellWidget(row, actionsCol, makeActionWidget(person.id));
-
-        totalPresent += present;
-        totalAbsent += absent;
     }
 
     m_statPresent->setText(tr("Présences : %1").arg(totalPresent));
@@ -423,6 +428,8 @@ void MainWindow::onCellClicked(int row, int column)
         next = QChar('P');
     else if (current == QLatin1String("P"))
         next = QChar('A');
+    else if (current == QLatin1String("A"))
+        next = QChar('R');
 
     reportWriteResult(m_store.setMark(personId, date, next), tr("Enregistrement"));
     refresh();
@@ -443,10 +450,21 @@ QWidget *MainWindow::makeActionWidget(const QString &personId)
     auto *deleteButton = new QPushButton(tr("Supprimer"), box);
     deleteButton->setProperty("variant", QStringLiteral("red"));
     deleteButton->setProperty("small", QStringLiteral("true"));
+    auto *reportButton = new QPushButton(tr("Actions ▾"), box);
+    reportButton->setProperty("small", QStringLiteral("true"));
+
+    auto *menu = new QMenu(reportButton);
+    menu->addAction(tr("Présence mensuelle (détail)"), [this, personId]() { exportMonthly(personId); });
+    menu->addAction(tr("Taux de présentéisme"),
+                    [this, personId]() { exportRate(personId, Reports::Rate::Presence); });
+    menu->addAction(tr("Taux d'absence"), [this, personId]() { exportRate(personId, Reports::Rate::Absence); });
+    menu->addAction(tr("Taux de retard"), [this, personId]() { exportRate(personId, Reports::Rate::Late); });
+    reportButton->setMenu(menu);
 
     layout->addWidget(insertButton);
     layout->addWidget(modifyButton);
     layout->addWidget(deleteButton);
+    layout->addWidget(reportButton);
 
     connect(insertButton, &QPushButton::clicked, this, [this, personId]() { insertPresence(personId); });
     connect(modifyButton, &QPushButton::clicked, this, [this, personId]() { modifyPresence(personId); });
@@ -499,6 +517,82 @@ void MainWindow::addPerson()
     refresh();
 }
 
+void MainWindow::importRoster()
+{
+    const QString path = QFileDialog::getOpenFileName(this, tr("Importer une liste (Excel / CSV)"), QString(),
+                                                      tr("Fichiers CSV (*.csv);;Tous les fichiers (*)"));
+    if (path.isEmpty())
+        return;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, windowTitle(), tr("Lecture du fichier impossible : %1").arg(file.errorString()));
+        return;
+    }
+    const QString content = Reports::decode(file.readAll());
+
+    QStringList existing;
+    for (const CloudPerson &person : m_all) {
+        if (person.kind == m_kind)
+            existing << person.code;
+    }
+    const Reports::RosterImport result = Reports::rosterFromCsv(content, m_kind, existing);
+
+    int added = 0;
+    int failed = 0;
+    for (const CloudPerson &person : result.people) {
+        if (m_store.addPerson(person))
+            ++added;
+        else
+            ++failed;
+    }
+    refresh();
+
+    const int errors = static_cast<int>(result.errors.size()) + failed;
+    QString summary = tr("%1 fiche(s) importée(s), %2 déjà existante(s) ignorée(s), %3 erreur(s).")
+                          .arg(added).arg(result.skippedExisting).arg(errors);
+    if (!result.errors.isEmpty())
+        summary += QStringLiteral("\n\n") + result.errors.mid(0, 10).join(QLatin1Char('\n'));
+    QMessageBox::information(this, windowTitle(), summary);
+}
+
+void MainWindow::exportRoster()
+{
+    std::vector<CloudPerson> people;
+    for (const CloudPerson &person : m_all) {
+        if (person.kind == m_kind)
+            people.push_back(person);
+    }
+    saveReport(QStringLiteral("%1.csv").arg(kindDef(m_kind).plural.toLower()), Reports::rosterCsv(people, m_kind));
+}
+
+void MainWindow::exportMonthly(const QString &personId)
+{
+    const CloudPerson *person = findPerson(personId);
+    if (!person)
+        return;
+    const QString name = QStringLiteral("presence_%1_%2_%3.csv")
+                             .arg(person->code, QString::number(selectedYear()))
+                             .arg(selectedMonth(), 2, 10, QLatin1Char('0'));
+    saveReport(name, Reports::monthlyDetailCsv(*person, m_marks.value(personId), selectedYear(), selectedMonth(),
+                                              m_restMask, QDate::currentDate()));
+}
+
+void MainWindow::exportRate(const QString &personId, Reports::Rate rate)
+{
+    const CloudPerson *person = findPerson(personId);
+    if (!person)
+        return;
+    const QString prefix = rate == Reports::Rate::Presence ? QStringLiteral("presenteisme")
+                           : rate == Reports::Rate::Absence ? QStringLiteral("absence")
+                                                            : QStringLiteral("retard");
+    const QString name = QStringLiteral("taux_%1_%2_%3_%4.csv")
+                             .arg(prefix, person->code, QString::number(selectedYear()))
+                             .arg(selectedMonth(), 2, 10, QLatin1Char('0'));
+    saveReport(name, Reports::rateCsv(*person, m_marks.value(personId), selectedYear(), selectedMonth(),
+                                      m_restMask, QDate::currentDate(), rate));
+}
+
 void MainWindow::insertPresence(const QString &personId)
 {
     const CloudPerson *person = findPerson(personId);
@@ -528,7 +622,8 @@ void MainWindow::insertPresence(const QString &personId)
     }
     refresh();
     if (failed > 0)
-        QMessageBox::warning(this, windowTitle(), tr("%1 case(s) non enregistrée(s) : %2").arg(failed).arg(m_store.lastError()));
+        QMessageBox::warning(this, windowTitle(),
+                             tr("%1 case(s) non enregistrée(s) : %2").arg(failed).arg(m_store.lastError()));
     QMessageBox::information(this, windowTitle(),
                              tr("%1 case(s) ajoutée(s), %2 ignorée(s) (repos ou déjà pointées).").arg(added).arg(skipped));
 }
