@@ -129,7 +129,28 @@ QWidget *MainWindow::buildHeader()
     layout->addWidget(monthLabel);
     layout->addWidget(m_monthBox);
     layout->addWidget(m_yearBox);
-    layout->addWidget(logout);
+    layout->addWidget(logout);   
+    auto *exportButton = new QPushButton(tr("Exporter CSV"), card);
+    exportButton->setProperty("variant", QStringLiteral("ghost"));
+    auto *privacyButton = new QPushButton(tr("Confidentialité"), card);
+    privacyButton->setProperty("variant", QStringLiteral("ghost"));
+    layout->addWidget(exportButton);
+    layout->addWidget(privacyButton);
+    connect(exportButton, &QPushButton::clicked, this, [this]() {
+        const QString path = QFileDialog::getSaveFileName(
+            this, tr("Exporter en CSV"),
+            QStringLiteral("pointage_%1_%2.csv").arg(selectedYear()).arg(selectedMonth(), 2, 10, QLatin1Char('0')),
+            tr("Fichiers CSV (*.csv)"));
+        if (path.isEmpty())
+            return;
+        const QString csv = Exporter::buildCsv(m_all, m_marks, m_kind, selectedYear(), selectedMonth());
+        QString error;
+        if (Exporter::writeCsv(path, csv, error))
+            QMessageBox::information(this, windowTitle(), tr("Export enregistré : %1").arg(path));
+        else
+            QMessageBox::warning(this, windowTitle(), tr("Export impossible : %1").arg(error));
+    });
+    connect(privacyButton, &QPushButton::clicked, this, [this]() { showPrivacyNotice(this); });
 
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
