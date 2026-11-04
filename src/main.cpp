@@ -1,11 +1,10 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
-#include <QMessageBox>
 #include <QStandardPaths>
 
 #include "auth.h"
-#include "database.h"
+#include "cloudstore.h"
 #include "logger.h"
 #include "logindialog.h"
 #include "mainwindow.h"
@@ -14,33 +13,36 @@
 
 namespace {
 
-void showLogin(Database &db, const QString &dataDir);
+void showLogin(const QString &dataDir);
 
-void openMainWindow(Database &db, const QString &dataDir, const UserRecord &user)
+void openMainWindow(const QString &dataDir, const SupabaseSession &session)
 {
-    qInfo() << "Connexion de" << user.email;
-    auto *window = new MainWindow(db, user);
+    qInfo() << "Connexion de" << session.email;
+    auto *store = new CloudStore(session, dataDir);
+    const QString name = session.name.isEmpty() ? session.email : session.name;
+    auto *window = new MainWindow(*store, name, session.email);
     window->setAttribute(Qt::WA_DeleteOnClose);
-    QObject::connect(window, &MainWindow::logoutRequested, window, [&db, dataDir, window]() {
+    QObject::connect(window, &QObject::destroyed, [store]() { delete store; });
+    QObject::connect(window, &MainWindow::logoutRequested, window, [dataDir, window]() {
         qInfo() << "Déconnexion";
         SecretStore::clear(dataDir);
-        showLogin(db, dataDir);
+        showLogin(dataDir);
         window->close();
     });
     window->show();
 }
 
-void showLogin(Database &db, const QString &dataDir)
+void showLogin(const QString &dataDir)
 {
-    auto *login = new LoginDialog(db, dataDir);
+    auto *login = new LoginDialog(dataDir);
     if (login->restoreSession()) {
-        const UserRecord user = login->user();
+        const SupabaseSession session = login->session();
         login->deleteLater();
-        openMainWindow(db, dataDir, user);
+        openMainWindow(dataDir, session);
         return;
     }
-    QObject::connect(login, &QDialog::accepted, login, [&db, dataDir, login]() {
-        openMainWindow(db, dataDir, login->user());
+    QObject::connect(login, &QDialog::accepted, login, [dataDir, login]() {
+        openMainWindow(dataDir, login->session());
     });
     QObject::connect(login, &QDialog::finished, login, &QObject::deleteLater);
     QObject::connect(login, &QDialog::rejected, qApp, &QCoreApplication::quit);
@@ -68,16 +70,7 @@ int main(int argc, char *argv[])
     Logger::install(dataDir + QStringLiteral("/pointage.log"));
     qInfo() << "Démarrage Pointage" << POINTAGE_VERSION;
 
-    Database db;
-    QString error;
-    if (!db.open(dataDir + QStringLiteral("/pointage.db"), error)) {
-        qCritical() << "Ouverture de la base impossible :" << error;
-        QMessageBox::critical(nullptr, QStringLiteral("Pointage"),
-                              QStringLiteral("Impossible d'ouvrir la base de données : %1").arg(error));
-        return 1;
-    }
-
-    showLogin(db, dataDir);
+    showLogin(dataDir);
     const int code = app.exec();
     qInfo() << "Arrêt Pointage" << code;
     return code;
