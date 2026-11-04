@@ -34,6 +34,10 @@ add_executable(pointage
     src/secretstore.cpp
     src/cloudstore.h
     src/cloudstore.cpp
+    src/exporter.h
+    src/exporter.cpp
+    src/privacynotice.h
+    src/privacynotice.cpp
 )
 
 target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network)
@@ -56,3 +60,11 @@ add_executable(tst_rules
 target_include_directories(tst_rules PRIVATE src)
 target_link_libraries(tst_rules PRIVATE Qt6::Test Qt6::Sql)
 add_test(NAME rules COMMAND tst_rules)
+
+add_executable(tst_export
+    tests/tst_export.cpp
+    src/exporter.cpp
+)
+target_include_directories(tst_export PRIVATE src)
+target_link_libraries(tst_export PRIVATE Qt6::Test Qt6::Network)
+add_test(NAME export COMMAND tst_export)
