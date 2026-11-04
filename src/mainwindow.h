@@ -2,12 +2,13 @@
 
 #include <QComboBox>
 #include <QDate>
+#include <QHash>
 #include <QMainWindow>
 #include <QSpinBox>
 #include <array>
 #include <vector>
 
-#include "database.h"
+#include "cloudstore.h"
 
 class QLineEdit;
 class QPushButton;
@@ -16,7 +17,7 @@ class QTableWidget;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    MainWindow(Database &db, const UserRecord &user, QWidget *parent = nullptr);
+    MainWindow(CloudStore &store, const QString &userName, const QString &userEmail, QWidget *parent = nullptr);
 
 signals:
     void logoutRequested();
@@ -26,9 +27,9 @@ private slots:
     void applySearch();
     void onCellClicked(int row, int column);
     void addPerson();
-    void insertPresence(int personId);
-    void modifyPresence(int personId);
-    void deletePerson(int personId);
+    void insertPresence(const QString &personId);
+    void modifyPresence(const QString &personId);
+    void deletePerson(const QString &personId);
     void toggleRestDay(int dayOfWeek);
     void setKind(int kind);
 
@@ -39,17 +40,22 @@ private:
     QWidget *buildSearchBar();
     QWidget *buildTableCard();
     QWidget *buildStats();
-    QWidget *makeActionWidget(int personId);
-    const PersonRecord *findPerson(int personId) const;
+    QWidget *makeActionWidget(const QString &personId);
+    const CloudPerson *findPerson(const QString &personId) const;
+    void reportWriteResult(bool ok, const QString &action);
 
     int selectedYear() const { return m_yearBox->value(); }
     int selectedMonth() const { return m_monthBox->currentIndex() + 1; }
-    bool isRestDay(const QDate &date) const { return (m_user.restMask >> (date.dayOfWeek() % 7)) & 1; }
+    bool isRestDay(const QDate &date) const { return (m_restMask >> (date.dayOfWeek() % 7)) & 1; }
 
-    Database &m_db;
-    UserRecord m_user;
+    CloudStore &m_store;
+    QString m_userName;
+    QString m_userEmail;
+    int m_restMask = 1;
     int m_kind = 0;
-    std::vector<PersonRecord> m_people;
+    std::vector<CloudPerson> m_all;
+    std::vector<CloudPerson> m_people;
+    QHash<QString, CloudMarks> m_marks;
     QComboBox *m_monthBox = nullptr;
     QSpinBox *m_yearBox = nullptr;
     QLineEdit *m_search = nullptr;
