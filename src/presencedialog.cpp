@@ -18,7 +18,7 @@ PresenceDialog::PresenceDialog(Mode mode, const QString &personName, int year, i
     const QDate last(year, month, first.daysInMonth());
 
     setWindowTitle(mode == Mode::Insert ? tr("Insérer") : tr("Modifier"));
-    resize(440, 360);
+    resize(480, 380);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(18, 18, 18, 18);
@@ -35,10 +35,15 @@ PresenceDialog::PresenceDialog(Mode mode, const QString &personName, int year, i
     m_absent = new QPushButton(tr("Absence"), this);
     m_absent->setCheckable(true);
     m_absent->setProperty("variant", QStringLiteral("absentChoice"));
+    m_late = new QPushButton(tr("Retard"), this);
+    m_late->setCheckable(true);
+    m_late->setProperty("variant", QStringLiteral("choice"));
     statusRow->addWidget(m_present);
     statusRow->addWidget(m_absent);
+    statusRow->addWidget(m_late);
     connect(m_present, &QPushButton::clicked, this, [this]() { setChoice(QChar('P')); });
     connect(m_absent, &QPushButton::clicked, this, [this]() { setChoice(QChar('A')); });
+    connect(m_late, &QPushButton::clicked, this, [this]() { setChoice(QChar('R')); });
 
     if (mode == Mode::Modify) {
         m_clear = new QPushButton(tr("Effacer"), this);
@@ -69,8 +74,13 @@ PresenceDialog::PresenceDialog(Mode mode, const QString &personName, int year, i
         m_day = new QComboBox(this);
         for (auto it = marks.cbegin(); it != marks.cend(); ++it) {
             const QDate date(year, month, it.key());
-            const QString label = french.toString(date, QStringLiteral("dddd d MMMM"))
-                                  + (it.value() == QChar('P') ? tr(" — Présence") : tr(" — Absence"));
+            QString label = french.toString(date, QStringLiteral("dddd d MMMM"));
+            if (it.value() == QChar('P'))
+                label += tr(" — Présence");
+            else if (it.value() == QChar('A'))
+                label += tr(" — Absence");
+            else
+                label += tr(" — Retard");
             m_day->addItem(label, it.key());
         }
         layout->addWidget(m_day);
@@ -98,6 +108,7 @@ void PresenceDialog::setChoice(QChar status)
     m_chosen = true;
     m_present->setChecked(status == QChar('P'));
     m_absent->setChecked(status == QChar('A'));
+    m_late->setChecked(status == QChar('R'));
     if (m_clear)
         m_clear->setChecked(status.isNull());
 }
@@ -117,7 +128,7 @@ QList<QDate> PresenceDialog::dates() const
 void PresenceDialog::onSave()
 {
     if (!m_chosen) {
-        QMessageBox::warning(this, windowTitle(), tr("Choisis Présence, Absence ou Effacer."));
+        QMessageBox::warning(this, windowTitle(), tr("Choisis Présence, Absence, Retard ou Effacer."));
         return;
     }
     if (m_mode == Mode::Insert && m_from->date() > m_to->date()) {
