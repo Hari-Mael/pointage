@@ -36,6 +36,8 @@ add_executable(pointage
     src/cloudstore.cpp
     src/exporter.h
     src/exporter.cpp
+    src/reports.h
+    src/reports.cpp
     src/privacynotice.h
     src/privacynotice.cpp
 )
@@ -51,6 +53,7 @@ if(WIN32)
 endif()
 
 enable_testing()
+
 add_executable(tst_rules
     tests/tst_rules.cpp
     src/auth.cpp
@@ -68,3 +71,12 @@ add_executable(tst_export
 target_include_directories(tst_export PRIVATE src)
 target_link_libraries(tst_export PRIVATE Qt6::Test Qt6::Network)
 add_test(NAME export COMMAND tst_export)
+
+add_executable(tst_reports
+    tests/tst_reports.cpp
+    src/reports.cpp
+    src/fields.cpp
+)
+target_include_directories(tst_reports PRIVATE src)
+target_link_libraries(tst_reports PRIVATE Qt6::Test Qt6::Network)
+add_test(NAME reports COMMAND tst_reports)
