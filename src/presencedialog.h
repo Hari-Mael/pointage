@@ -35,6 +35,7 @@ private:
     bool m_chosen = false;
     QPushButton *m_present = nullptr;
     QPushButton *m_absent = nullptr;
+    QPushButton *m_late = nullptr;
     QPushButton *m_clear = nullptr;
     QDateEdit *m_from = nullptr;
     QDateEdit *m_to = nullptr;
