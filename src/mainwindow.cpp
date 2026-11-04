@@ -17,8 +17,11 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include <QApplication>
+
 #include "exporter.h"
 #include "fields.h"
+#include "logo.h"
 #include "persondialog.h"
 #include "presencedialog.h"
 #include "privacynotice.h"
@@ -124,6 +127,11 @@ QWidget *MainWindow::buildHeader()
     subtitle->setObjectName(QStringLiteral("subtitle"));
     titles->addWidget(title);
     titles->addWidget(subtitle);
+    m_logoLabel = new QLabel(card);
+    m_logoLabel->setFixedSize(56, 56);
+    m_logoLabel->setAlignment(Qt::AlignCenter);
+    m_logoLabel->setPixmap(Logo::pixmap(56));
+    layout->addWidget(m_logoLabel);
     layout->addLayout(titles, 1);
 
     const QLocale french(QLocale::French);
@@ -146,6 +154,15 @@ QWidget *MainWindow::buildHeader()
     layout->addWidget(m_monthBox);
     layout->addWidget(m_yearBox);
     layout->addWidget(logout);
+
+    auto *changeLogoButton = new QPushButton(tr("Changer le logo"), card);
+    changeLogoButton->setProperty("variant", QStringLiteral("ghost"));
+    auto *resetLogoButton = new QPushButton(tr("Logo par défaut"), card);
+    resetLogoButton->setProperty("variant", QStringLiteral("ghost"));
+    layout->addWidget(changeLogoButton);
+    layout->addWidget(resetLogoButton);
+    connect(changeLogoButton, &QPushButton::clicked, this, &MainWindow::changeLogo);
+    connect(resetLogoButton, &QPushButton::clicked, this, &MainWindow::resetLogo);
 
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
@@ -687,4 +704,31 @@ void MainWindow::deletePerson(const QString &personId)
     else
         reportWriteResult(m_store.deletePerson(personId), tr("Suppression"));
     refresh();
+}
+
+void MainWindow::changeLogo()
+{
+    const QString path = QFileDialog::getOpenFileName(this, tr("Choisir un logo"), QString(),
+                                                      tr("Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!Logo::setCustom(path, error)) {
+        QMessageBox::warning(this, windowTitle(), tr("Logo non enregistré : %1").arg(error));
+        return;
+    }
+    refreshLogo();
+}
+
+void MainWindow::resetLogo()
+{
+    Logo::resetCustom();
+    refreshLogo();
+}
+
+void MainWindow::refreshLogo()
+{
+    m_logoLabel->setPixmap(Logo::pixmap(56));
+    qApp->setWindowIcon(Logo::icon());
+    setWindowIcon(Logo::icon());
 }
