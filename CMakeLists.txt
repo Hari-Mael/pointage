@@ -10,7 +10,7 @@ set(CMAKE_AUTORCC ON)
 # QXlsx a besoin des en-têtes privés de QtGui. Le paquet Qt installé par aqtinstall
 # ne fournit pas toujours la configuration CMake correspondante : on utilise la nôtre.
 set(Qt6GuiPrivate_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shim")
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Charts Test GuiPrivate)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network Charts PrintSupport Test GuiPrivate)
 
 include(FetchContent)
 set(QXLSX_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -66,6 +66,12 @@ add_executable(pointage
     src/schedule.cpp
     src/settingsdialog.h
     src/settingsdialog.cpp
+    src/schoolclasses.h
+    src/schoolclasses.cpp
+    src/classboarddialog.h
+    src/classboarddialog.cpp
+    src/studentreport.h
+    src/studentreport.cpp
     resources/resources.qrc
 )
 
@@ -73,7 +79,7 @@ if(WIN32)
     target_sources(pointage PRIVATE resources/app.rc)
 endif()
 
-target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network Qt6::Charts QXlsx::QXlsx)
+target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network Qt6::Charts Qt6::PrintSupport QXlsx::QXlsx)
 if(WIN32)
     target_link_libraries(pointage PRIVATE Crypt32)
     set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
