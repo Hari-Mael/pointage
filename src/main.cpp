@@ -3,11 +3,12 @@
 #include <QDir>
 #include <QStandardPaths>
 
+#include "appstyle.h"
 #include "auth.h"
 #include "cloudstore.h"
 #include "logger.h"
-#include "logindialog.h"
 #include "logo.h"
+#include "logindialog.h"
 #include "mainwindow.h"
 #include "secretstore.h"
 #include "theme.h"
@@ -65,6 +66,7 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName(QStringLiteral("Hari-Mael"));
     QApplication::setApplicationVersion(QStringLiteral(POINTAGE_VERSION));
     applyTheme(app);
+    app.setStyleSheet(app.styleSheet() + appStyleSheet());
     app.setWindowIcon(Logo::icon());
 
     const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
