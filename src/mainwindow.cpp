@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include <QColor>
+#include <QIcon>
 #include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
@@ -24,6 +25,7 @@
 #include "exporter.h"
 #include "fields.h"
 #include "persondialog.h"
+#include "photo.h"
 #include "presencedialog.h"
 #include "schedule.h"
 #include "settingsdialog.h"
@@ -77,6 +79,7 @@ MainWindow::MainWindow(CloudStore &store, const QString &userName, const QString
 {
     setWindowTitle(tr("Feuille de Pointage Pro — %1").arg(userName));
     resize(1180, 820);
+    m_store.fetchAvatar(m_userAvatar);
     buildUi();
     refresh();
 }
@@ -112,6 +115,7 @@ void MainWindow::buildUi()
     root->addWidget(buildRestBar());
     root->addWidget(buildSearchBar());
     root->addWidget(buildTableCard(), 1);
+    root->addWidget(buildFooter());
 
     setCentralWidget(central);
 
@@ -154,6 +158,14 @@ QWidget *MainWindow::buildHeader()
     layout->addWidget(m_monthBox);
     layout->addWidget(m_yearBox);
 
+    m_avatarButton = new QPushButton(card);
+    m_avatarButton->setFlat(true);
+    m_avatarButton->setIconSize(QSize(44, 44));
+    m_avatarButton->setToolTip(tr("Photo de profil"));
+    refreshAvatar();
+    layout->addWidget(m_avatarButton);
+    connect(m_avatarButton, &QPushButton::clicked, this, &MainWindow::changeUserAvatar);
+
     auto *dashboardButton = new QPushButton(tr("Tableau de bord"), card);
     dashboardButton->setProperty("variant", QStringLiteral("teal"));
     layout->addWidget(dashboardButton);
@@ -164,13 +176,8 @@ QWidget *MainWindow::buildHeader()
     layout->addWidget(settingsButton);
     connect(settingsButton, &QPushButton::clicked, this, &MainWindow::openSettings);
 
-    auto *logout = new QPushButton(tr("Déconnexion"), card);
-    logout->setProperty("variant", QStringLiteral("ghost"));
-    layout->addWidget(logout);
-
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
-    connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
     return card;
 }
 
@@ -382,10 +389,11 @@ void MainWindow::refresh()
         QTableWidgetItem *idItem = makeItem(person.code, Qt::AlignLeft);
         idItem->setData(Qt::UserRole, person.id);
         m_table->setItem(row, kColId, idItem);
-        const QString displayName = person.className.isEmpty()
-                                        ? person.name
-                                        : QStringLiteral("%1  ·  %2").arg(person.name, person.className);
-        m_table->setItem(row, kColName, makeItem(displayName, Qt::AlignLeft));
+        const QString displayName = person.className.isEmpty() ? person.name
+                                                                : QStringLiteral("%1  ·  %2").arg(person.name, person.className);
+        QTableWidgetItem *nameItem = makeItem(displayName, Qt::AlignLeft);
+        nameItem->setIcon(QIcon(Photo::avatar(person.photo, person.name, 30)));
+        m_table->setItem(row, kColName, nameItem);
 
         for (int day = 1; day <= days; ++day) {
             QTableWidgetItem *cell = makeItem(QString());
@@ -552,6 +560,7 @@ void MainWindow::addPerson()
     person.code = created.code;
     person.name = created.name;
     person.fields = created.fields;
+    person.photo = dialog.photo();
     reportWriteResult(m_store.addPerson(person), tr("Ajout de la fiche"));
     refresh();
 }
@@ -572,6 +581,7 @@ void MainWindow::editPerson(const QString &personId)
     PersonDialog dialog(original.kind, original.code, codes, this);
     dialog.setEditMode();
     dialog.setValues(original.fields);
+    dialog.setPhoto(original.photo);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
@@ -580,6 +590,7 @@ void MainWindow::editPerson(const QString &personId)
     updated.code = edited.code;
     updated.name = edited.name;
     updated.fields = edited.fields;
+    updated.photo = dialog.photo();
     reportWriteResult(m_store.updatePerson(updated), tr("Modification de la fiche"));
     refresh();
 }
@@ -826,4 +837,44 @@ void MainWindow::liveUpdate()
     m_marks = marks;
     m_restMask = restMask;
     m_dashboard->setSnapshot(buildSnapshot());
+}
+
+QWidget *MainWindow::buildFooter()
+{
+    auto *logout = new QPushButton(tr("Déconnexion"), this);
+    logout->setProperty("variant", QStringLiteral("ghost"));
+    connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
+
+    auto *row = new QHBoxLayout;
+    row->addWidget(logout);
+    row->addStretch(1);
+
+    auto *footer = new QWidget(this);
+    footer->setLayout(row);
+    return footer;
+}
+
+void MainWindow::refreshAvatar()
+{
+    m_avatarButton->setIcon(QIcon(Photo::avatar(m_userAvatar, m_userName, 44)));
+}
+
+void MainWindow::changeUserAvatar()
+{
+    const QString path = QFileDialog::getOpenFileName(this, tr("Photo de profil"), QString(),
+                                                      tr("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    const QString encoded = Photo::encodeFile(path, error);
+    if (encoded.isEmpty()) {
+        QMessageBox::warning(this, windowTitle(), tr("Photo non utilisable : %1").arg(error));
+        return;
+    }
+    if (!m_store.setAvatar(encoded)) {
+        reportWriteResult(false, tr("Enregistrement de la photo"));
+        return;
+    }
+    m_userAvatar = encoded;
+    refreshAvatar();
 }
