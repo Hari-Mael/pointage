@@ -49,6 +49,7 @@ private slots:
     void openStudentReport(const QString &personId);
     void openDashboard();
     void liveUpdate();
+    void changeUserAvatar();
 
 private:
     void buildUi();
@@ -59,4 +60,39 @@ private:
     QWidget *buildStats();
     QWidget *makeActionWidget(const QString &personId);
     const CloudPerson *findPerson(const QString &personId) const;
-    void reportWriteResult(bool ok, const QString
+    void reportWriteResult(bool ok, const QString &action);
+    void saveReport(const QString &defaultName, const QString &content);
+    QWidget *buildFooter();
+    void refreshAvatar();
+    void updateScheduleLabel();
+    Dashboard::Snapshot buildSnapshot() const;
+
+    int selectedYear() const { return m_yearBox->value(); }
+    int selectedMonth() const { return m_monthBox->currentIndex() + 1; }
+    bool isRestDay(const QDate &date) const { return (m_restMask >> (date.dayOfWeek() % 7)) & 1; }
+
+    CloudStore &m_store;
+    QString m_userName;
+    QString m_userEmail;
+    int m_restMask = 1;
+    int m_kind = 0;
+    std::vector<CloudPerson> m_all;
+    std::vector<CloudPerson> m_people;
+    QHash<QString, CloudMarks> m_marks;
+    QPointer<DashboardDialog> m_dashboard;
+    QTimer *m_liveTimer = nullptr;
+    QPushButton *m_avatarButton = nullptr;
+    QString m_userAvatar;
+    QLabel *m_scheduleLabel = nullptr;
+    QComboBox *m_monthBox = nullptr;
+    QSpinBox *m_yearBox = nullptr;
+    QLineEdit *m_search = nullptr;
+    QTableWidget *m_table = nullptr;
+    QPushButton *m_tabEmp = nullptr;
+    QPushButton *m_tabStu = nullptr;
+    QPushButton *m_statPresent = nullptr;
+    QPushButton *m_statAbsent = nullptr;
+    QPushButton *m_statEmp = nullptr;
+    QPushButton *m_statStu = nullptr;
+    std::array<QPushButton *, 7> m_chips{};
+};
