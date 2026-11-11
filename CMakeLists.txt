@@ -74,6 +74,10 @@ add_executable(pointage
     src/studentreport.cpp
     src/contractboarddialog.h
     src/contractboarddialog.cpp
+    src/photo.h
+    src/photo.cpp
+    src/appstyle.h
+    src/appstyle.cpp
     resources/resources.qrc
 )
 
