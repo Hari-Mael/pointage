@@ -33,6 +33,7 @@ private slots:
     void applySearch();
     void onCellClicked(int row, int column);
     void addPerson();
+    void editPerson(const QString &personId);
     void insertPresence(const QString &personId);
     void modifyPresence(const QString &personId);
     void deletePerson(const QString &personId);
@@ -42,8 +43,7 @@ private slots:
     void exportRoster();
     void exportMonthly(const QString &personId);
     void exportRate(const QString &personId, Reports::Rate rate);
-    void changeLogo();
-    void resetLogo();
+    void openSettings();
     void openDashboard();
     void liveUpdate();
 
@@ -58,7 +58,7 @@ private:
     const CloudPerson *findPerson(const QString &personId) const;
     void reportWriteResult(bool ok, const QString &action);
     void saveReport(const QString &defaultName, const QString &content);
-    void refreshLogo();
+    void updateScheduleLabel();
     Dashboard::Snapshot buildSnapshot() const;
 
     int selectedYear() const { return m_yearBox->value(); }
@@ -73,9 +73,9 @@ private:
     std::vector<CloudPerson> m_all;
     std::vector<CloudPerson> m_people;
     QHash<QString, CloudMarks> m_marks;
-    QLabel *m_logoLabel = nullptr;
     QPointer<DashboardDialog> m_dashboard;
     QTimer *m_liveTimer = nullptr;
+    QLabel *m_scheduleLabel = nullptr;
     QComboBox *m_monthBox = nullptr;
     QSpinBox *m_yearBox = nullptr;
     QLineEdit *m_search = nullptr;
