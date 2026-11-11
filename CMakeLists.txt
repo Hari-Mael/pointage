@@ -7,10 +7,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-if(MSVC)
-    add_compile_options(/utf-8)
-endif()
-
 # QXlsx a besoin des en-têtes privés de QtGui. Le paquet Qt installé par aqtinstall
 # ne fournit pas toujours la configuration CMake correspondante : on utilise la nôtre.
 set(Qt6GuiPrivate_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shim")
@@ -66,6 +62,10 @@ add_executable(pointage
     src/excelreport.cpp
     src/dashboarddialog.h
     src/dashboarddialog.cpp
+    src/schedule.h
+    src/schedule.cpp
+    src/settingsdialog.h
+    src/settingsdialog.cpp
     resources/resources.qrc
 )
 
