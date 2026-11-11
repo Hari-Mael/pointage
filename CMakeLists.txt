@@ -72,6 +72,8 @@ add_executable(pointage
     src/classboarddialog.cpp
     src/studentreport.h
     src/studentreport.cpp
+    src/contractboarddialog.h
+    src/contractboarddialog.cpp
     resources/resources.qrc
 )
 
@@ -82,12 +84,10 @@ endif()
 target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network Qt6::Charts Qt6::PrintSupport QXlsx::QXlsx)
 if(WIN32)
     target_link_libraries(pointage PRIVATE Crypt32)
-    set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 target_compile_definitions(pointage PRIVATE POINTAGE_VERSION="${PROJECT_VERSION}")
 
 enable_testing()
-
 add_executable(tst_rules
     tests/tst_rules.cpp
     src/auth.cpp
@@ -105,6 +105,10 @@ add_executable(tst_export
 target_include_directories(tst_export PRIVATE src)
 target_link_libraries(tst_export PRIVATE Qt6::Test Qt6::Network)
 add_test(NAME export COMMAND tst_export)
+
+if(WIN32)
+    set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
 
 add_executable(tst_reports
     tests/tst_reports.cpp
