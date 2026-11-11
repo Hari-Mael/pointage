@@ -86,8 +86,7 @@ bool CloudStore::send(const QByteArray &method, const QString &path, const QByte
 bool CloudStore::fetchPeople(std::vector<CloudPerson> &people)
 {
     QByteArray response;
-    if (!send("GET", QStringLiteral("/rest/v1/persons?select=id,kind,code,name,class_name,fields&order=code"), {}, {},
-              response))
+    if (!send("GET", QStringLiteral("/rest/v1/persons?select=id,kind,code,name,class_name,photo,fields&order=code"), {}, {}, response))
         return false;
 
     people.clear();
@@ -99,6 +98,7 @@ bool CloudStore::fetchPeople(std::vector<CloudPerson> &people)
         person.code = row.value(QLatin1String("code")).toString();
         person.name = row.value(QLatin1String("name")).toString();
         person.className = row.value(QLatin1String("class_name")).toString();
+        person.photo = row.value(QLatin1String("photo")).toString();
         for (const QJsonValue &field : row.value(QLatin1String("fields")).toArray())
             person.fields << field.toString();
         people.push_back(person);
@@ -150,6 +150,7 @@ bool CloudStore::addPerson(const CloudPerson &person)
                            {"code", person.code},
                            {"name", person.name},
                            {"class_name", person.className},
+                           {"photo", person.photo},
                            {"fields", fields}};
     QByteArray response;
     return send("POST", QStringLiteral("/rest/v1/persons"), QJsonDocument(body).toJson(QJsonDocument::Compact),
@@ -164,6 +165,7 @@ bool CloudStore::updatePerson(const CloudPerson &person)
     const QJsonObject body{{"code", person.code},
                            {"name", person.name},
                            {"class_name", person.className},
+                           {"photo", person.photo},
                            {"fields", fields}};
     QByteArray response;
     return send("PATCH", QStringLiteral("/rest/v1/persons?id=eq.%1").arg(person.id),
@@ -200,6 +202,26 @@ bool CloudStore::clearMarks(const QString &personId)
 bool CloudStore::setRestMask(int mask)
 {
     const QJsonObject body{{"owner_id", m_session.userId}, {"rest_mask", mask}};
+    QByteArray response;
+    return send("POST", QStringLiteral("/rest/v1/user_settings?on_conflict=owner_id"),
+                QJsonDocument(body).toJson(QJsonDocument::Compact),
+                "resolution=merge-duplicates,return=minimal", response);
+}
+
+bool CloudStore::fetchAvatar(QString &avatar)
+{
+    const QString path = QStringLiteral("/rest/v1/user_settings?select=avatar&owner_id=eq.%1").arg(m_session.userId);
+    QByteArray response;
+    if (!send("GET", path, {}, {}, response))
+        return false;
+    const QJsonArray rows = QJsonDocument::fromJson(response).array();
+    avatar = rows.isEmpty() ? QString() : rows.first().toObject().value(QLatin1String("avatar")).toString();
+    return true;
+}
+
+bool CloudStore::setAvatar(const QString &avatar)
+{
+    const QJsonObject body{{"owner_id", m_session.userId}, {"avatar", avatar}};
     QByteArray response;
     return send("POST", QStringLiteral("/rest/v1/user_settings?on_conflict=owner_id"),
                 QJsonDocument(body).toJson(QJsonDocument::Compact),
