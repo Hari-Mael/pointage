@@ -30,7 +30,7 @@ private:
     void switchMode(int index);
     void applyAccent(const QColor &accent);
     void animateGlowTo(const QColor &color);
-    void lightUp();
+    void onPull();
     QWidget *buildLoginPage();
     QWidget *buildRegisterPage();
 
@@ -38,6 +38,7 @@ private:
     SupabaseAuth m_auth;
     SupabaseSession m_session;
     QColor m_accent;
+    int m_colorIndex = -1;
     LampWidget *m_lamp = nullptr;
     QFrame *m_card = nullptr;
     QGraphicsOpacityEffect *m_cardEffect = nullptr;
