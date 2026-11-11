@@ -2,13 +2,17 @@
 
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QFileDialog>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 #include "fields.h"
+#include "photo.h"
 
 namespace {
 
@@ -42,11 +46,29 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
 {
     const KindDef &def = kindDef(kind);
     setWindowTitle(tr("Fiche %1").arg(def.singular));
-    resize(460, 620);
+    resize(460, 680);
 
     auto *layout = new QVBoxLayout(this);
-    auto *form = new QFormLayout;
 
+    auto *photoRow = new QHBoxLayout;
+    m_preview = new QLabel(this);
+    m_preview->setFixedSize(96, 96);
+    m_preview->setAlignment(Qt::AlignCenter);
+    auto *photoButtons = new QVBoxLayout;
+    auto *choose = new QPushButton(tr("Ajouter une photo (facultatif)"), this);
+    choose->setProperty("variant", QStringLiteral("ghost"));
+    auto *remove = new QPushButton(tr("Retirer la photo"), this);
+    remove->setProperty("variant", QStringLiteral("ghost"));
+    photoButtons->addWidget(choose);
+    photoButtons->addWidget(remove);
+    photoButtons->addStretch(1);
+    photoRow->addWidget(m_preview);
+    photoRow->addLayout(photoButtons, 1);
+    layout->addLayout(photoRow);
+    connect(choose, &QPushButton::clicked, this, &PersonDialog::choosePhoto);
+    connect(remove, &QPushButton::clicked, this, &PersonDialog::removePhoto);
+
+    auto *form = new QFormLayout;
     m_code = new QLineEdit(suggestedCode, this);
     form->addRow(def.idLabel + QStringLiteral(" *"), m_code);
 
@@ -59,14 +81,51 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
         QWidget *input = makeInput(field, this);
         m_inputs.push_back(input);
         form->addRow(field.label + (field.required ? QStringLiteral(" *") : QString()), input);
+        if (auto *edit = qobject_cast<QLineEdit *>(input))
+            connect(edit, &QLineEdit::textChanged, this, &PersonDialog::refreshPreview);
     }
-
     layout->addLayout(form);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::accepted, this, &PersonDialog::validateAndAccept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    refreshPreview();
+}
+
+void PersonDialog::setPhoto(const QString &encoded)
+{
+    m_photo = encoded;
+    refreshPreview();
+}
+
+void PersonDialog::choosePhoto()
+{
+    const QString path = QFileDialog::getOpenFileName(this, tr("Choisir une photo"), QString(),
+                                                      tr("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    const QString encoded = Photo::encodeFile(path, error);
+    if (encoded.isEmpty()) {
+        QMessageBox::warning(this, windowTitle(), tr("Photo non utilisable : %1").arg(error));
+        return;
+    }
+    m_photo = encoded;
+    refreshPreview();
+}
+
+void PersonDialog::removePhoto()
+{
+    m_photo.clear();
+    refreshPreview();
+}
+
+void PersonDialog::refreshPreview()
+{
+    const QString name = valueOf(m_inputs.size() > 0 ? m_inputs[0] : nullptr) + QLatin1Char(' ')
+                         + valueOf(m_inputs.size() > 1 ? m_inputs[1] : nullptr);
+    m_preview->setPixmap(Photo::avatar(m_photo, name.trimmed(), 96));
 }
 
 void PersonDialog::setEditMode()
