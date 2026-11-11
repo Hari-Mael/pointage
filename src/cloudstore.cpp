@@ -153,6 +153,17 @@ bool CloudStore::addPerson(const CloudPerson &person)
                 "return=minimal", response);
 }
 
+bool CloudStore::updatePerson(const CloudPerson &person)
+{
+    QJsonArray fields;
+    for (const QString &field : person.fields)
+        fields.append(field);
+    const QJsonObject body{{"code", person.code}, {"name", person.name}, {"fields", fields}};
+    QByteArray response;
+    return send("PATCH", QStringLiteral("/rest/v1/persons?id=eq.%1").arg(person.id),
+                QJsonDocument(body).toJson(QJsonDocument::Compact), "return=minimal", response);
+}
+
 bool CloudStore::deletePerson(const QString &personId)
 {
     QByteArray response;
