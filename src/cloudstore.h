@@ -29,6 +29,7 @@ public:
     bool fetchMarks(int year, int month, QHash<QString, CloudMarks> &marks);
     bool fetchRestMask(int &mask);
     bool addPerson(const CloudPerson &person);
+    bool updatePerson(const CloudPerson &person);
     bool deletePerson(const QString &personId);
     bool setMark(const QString &personId, const QDate &date, QChar status);
     bool clearMarks(const QString &personId);
