@@ -23,10 +23,8 @@
 #include "fields.h"
 #include "persondialog.h"
 #include "presencedialog.h"
-#include "privacynotice.h"
-#include "logo.h"
-
-#include <QApplication>
+#include "schedule.h"
+#include "settingsdialog.h"
 
 namespace {
 
@@ -35,7 +33,7 @@ constexpr int kColId = 1;
 constexpr int kColName = 2;
 constexpr int kColFirstDay = 3;
 constexpr int kDayColumnWidth = 36;
-constexpr int kActionsColumnWidth = 380;
+constexpr int kActionsColumnWidth = 540;
 constexpr int kRowHeight = 40;
 
 const char *const kDayShort[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
@@ -134,11 +132,6 @@ QWidget *MainWindow::buildHeader()
     subtitle->setObjectName(QStringLiteral("subtitle"));
     titles->addWidget(title);
     titles->addWidget(subtitle);
-    m_logoLabel = new QLabel(card);
-    m_logoLabel->setFixedSize(56, 56);
-    m_logoLabel->setAlignment(Qt::AlignCenter);
-    m_logoLabel->setPixmap(Logo::pixmap(56));
-    layout->addWidget(m_logoLabel);
     layout->addLayout(titles, 1);
 
     const QLocale french(QLocale::French);
@@ -154,36 +147,27 @@ QWidget *MainWindow::buildHeader()
 
     auto *monthLabel = new QLabel(tr("Mois :"), card);
     monthLabel->setObjectName(QStringLiteral("muted"));
-    auto *logout = new QPushButton(tr("Déconnexion"), card);
-    logout->setProperty("variant", QStringLiteral("ghost"));
-
     layout->addWidget(monthLabel);
     layout->addWidget(m_monthBox);
     layout->addWidget(m_yearBox);
-    layout->addWidget(logout);
-
-    auto *changeLogoButton = new QPushButton(tr("Changer le logo"), card);
-    changeLogoButton->setProperty("variant", QStringLiteral("ghost"));
-    auto *resetLogoButton = new QPushButton(tr("Logo par défaut"), card);
-    resetLogoButton->setProperty("variant", QStringLiteral("ghost"));
-    layout->addWidget(changeLogoButton);
-    layout->addWidget(resetLogoButton);
-    connect(changeLogoButton, &QPushButton::clicked, this, &MainWindow::changeLogo);
-    connect(resetLogoButton, &QPushButton::clicked, this, &MainWindow::resetLogo);
 
     auto *dashboardButton = new QPushButton(tr("Tableau de bord"), card);
     dashboardButton->setProperty("variant", QStringLiteral("teal"));
     layout->addWidget(dashboardButton);
     connect(dashboardButton, &QPushButton::clicked, this, &MainWindow::openDashboard);
 
+    auto *settingsButton = new QPushButton(tr("Paramètres"), card);
+    settingsButton->setProperty("variant", QStringLiteral("ghost"));
+    layout->addWidget(settingsButton);
+    connect(settingsButton, &QPushButton::clicked, this, &MainWindow::openSettings);
+
+    auto *logout = new QPushButton(tr("Déconnexion"), card);
+    logout->setProperty("variant", QStringLiteral("ghost"));
+    layout->addWidget(logout);
+
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
     connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
-
-    auto *privacyButton = new QPushButton(tr("Confidentialité"), card);
-    privacyButton->setProperty("variant", QStringLiteral("ghost"));
-    layout->insertWidget(layout->count() - 1, privacyButton);
-    connect(privacyButton, &QPushButton::clicked, this, [this]() { showPrivacyNotice(this); });
     return card;
 }
 
@@ -280,6 +264,12 @@ QWidget *MainWindow::buildTableCard()
     hint->setObjectName(QStringLiteral("muted"));
     hint->setAlignment(Qt::AlignCenter);
     layout->addWidget(hint);
+
+    m_scheduleLabel = new QLabel(card);
+    m_scheduleLabel->setObjectName(QStringLiteral("muted"));
+    m_scheduleLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(m_scheduleLabel);
+    updateScheduleLabel();
     return card;
 }
 
@@ -313,6 +303,11 @@ QWidget *MainWindow::buildStats()
     layout->addWidget(m_statEmp, 1);
     layout->addWidget(m_statStu, 1);
     return row;
+}
+
+void MainWindow::updateScheduleLabel()
+{
+    m_scheduleLabel->setText(tr("Créneaux : %1").arg(Schedule::load().summary()));
 }
 
 void MainWindow::refresh()
@@ -473,6 +468,9 @@ QWidget *MainWindow::makeActionWidget(const QString &personId)
     layout->setContentsMargins(4, 3, 4, 3);
     layout->setSpacing(6);
 
+    auto *editPersonButton = new QPushButton(tr("Modifier la fiche"), box);
+    editPersonButton->setProperty("variant", QStringLiteral("ghost"));
+    editPersonButton->setProperty("small", QStringLiteral("true"));
     auto *insertButton = new QPushButton(tr("Insérer"), box);
     insertButton->setProperty("variant", QStringLiteral("teal"));
     insertButton->setProperty("small", QStringLiteral("true"));
@@ -492,11 +490,13 @@ QWidget *MainWindow::makeActionWidget(const QString &personId)
     menu->addAction(tr("Taux de retard"), [this, personId]() { exportRate(personId, Reports::Rate::Late); });
     reportButton->setMenu(menu);
 
+    layout->addWidget(editPersonButton);
     layout->addWidget(insertButton);
     layout->addWidget(modifyButton);
     layout->addWidget(deleteButton);
     layout->addWidget(reportButton);
 
+    connect(editPersonButton, &QPushButton::clicked, this, [this, personId]() { editPerson(personId); });
     connect(insertButton, &QPushButton::clicked, this, [this, personId]() { insertPresence(personId); });
     connect(modifyButton, &QPushButton::clicked, this, [this, personId]() { modifyPresence(personId); });
     connect(deleteButton, &QPushButton::clicked, this, [this, personId]() { deletePerson(personId); });
@@ -545,6 +545,34 @@ void MainWindow::addPerson()
     person.name = created.name;
     person.fields = created.fields;
     reportWriteResult(m_store.addPerson(person), tr("Ajout de la fiche"));
+    refresh();
+}
+
+void MainWindow::editPerson(const QString &personId)
+{
+    const CloudPerson *found = findPerson(personId);
+    if (!found)
+        return;
+    const CloudPerson original = *found;
+
+    QStringList codes;
+    for (const CloudPerson &person : m_all) {
+        if (person.kind == original.kind && person.id != original.id)
+            codes << person.code;
+    }
+
+    PersonDialog dialog(original.kind, original.code, codes, this);
+    dialog.setEditMode();
+    dialog.setValues(original.fields);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const PersonRecord edited = dialog.person();
+    CloudPerson updated = original;
+    updated.code = edited.code;
+    updated.name = edited.name;
+    updated.fields = edited.fields;
+    reportWriteResult(m_store.updatePerson(updated), tr("Modification de la fiche"));
     refresh();
 }
 
@@ -720,31 +748,11 @@ void MainWindow::deletePerson(const QString &personId)
     refresh();
 }
 
-void MainWindow::changeLogo()
+void MainWindow::openSettings()
 {
-    const QString path = QFileDialog::getOpenFileName(this, tr("Choisir un logo"), QString(),
-                                                      tr("Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)"));
-    if (path.isEmpty())
-        return;
-    QString error;
-    if (!Logo::setCustom(path, error)) {
-        QMessageBox::warning(this, windowTitle(), tr("Logo non enregistré : %1").arg(error));
-        return;
-    }
-    refreshLogo();
-}
-
-void MainWindow::resetLogo()
-{
-    Logo::resetCustom();
-    refreshLogo();
-}
-
-void MainWindow::refreshLogo()
-{
-    m_logoLabel->setPixmap(Logo::pixmap(56));
-    qApp->setWindowIcon(Logo::icon());
-    setWindowIcon(Logo::icon());
+    SettingsDialog dialog(this);
+    dialog.exec();
+    updateScheduleLabel();
 }
 
 Dashboard::Snapshot MainWindow::buildSnapshot() const
