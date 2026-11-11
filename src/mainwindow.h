@@ -44,6 +44,8 @@ private slots:
     void exportMonthly(const QString &personId);
     void exportRate(const QString &personId, Reports::Rate rate);
     void openSettings();
+    void openClassBoard();
+    void openStudentReport(const QString &personId);
     void openDashboard();
     void liveUpdate();
 
