@@ -15,6 +15,7 @@ struct CloudPerson {
     QString code;
     QString name;
     QString className;
+    QString photo;
     QStringList fields;
 };
 
@@ -35,6 +36,8 @@ public:
     bool setMark(const QString &personId, const QDate &date, QChar status);
     bool clearMarks(const QString &personId);
     bool setRestMask(int mask);
+    bool fetchAvatar(QString &avatar);
+    bool setAvatar(const QString &avatar);
 
 private:
     bool send(const QByteArray &method, const QString &path, const QByteArray &body,
