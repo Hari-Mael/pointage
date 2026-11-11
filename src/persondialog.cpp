@@ -69,6 +69,23 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
+void PersonDialog::setEditMode()
+{
+    setWindowTitle(tr("Modifier la fiche %1").arg(kindDef(m_kind).singular));
+}
+
+void PersonDialog::setValues(const QStringList &values)
+{
+    for (size_t i = 0; i < m_inputs.size() && i < static_cast<size_t>(values.size()); ++i) {
+        const QString value = values.at(static_cast<int>(i));
+        QWidget *input = m_inputs[i];
+        if (auto *box = qobject_cast<QComboBox *>(input))
+            box->setCurrentText(value);
+        else if (auto *edit = qobject_cast<QLineEdit *>(input))
+            edit->setText(value);
+    }
+}
+
 void PersonDialog::validateAndAccept()
 {
     const KindDef &def = kindDef(m_kind);
