@@ -305,6 +305,7 @@ void ContractBoardDialog::onAddEmployee(const QString &contract)
     person.code = created.code;
     person.name = created.name;
     person.fields = created.fields;
+    person.photo = dialog.photo();
     if (!m_store.addPerson(person)) {
         QMessageBox::warning(this, windowTitle(), tr("Ajout impossible : %1").arg(m_store.lastError()));
         return;
