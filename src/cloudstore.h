@@ -14,6 +14,7 @@ struct CloudPerson {
     int kind = 0;
     QString code;
     QString name;
+    QString className;
     QStringList fields;
 };
 
