@@ -19,6 +19,7 @@
 #include <QVBoxLayout>
 
 #include "classboarddialog.h"
+#include "contractboarddialog.h"
 #include "dashboarddialog.h"
 #include "exporter.h"
 #include "fields.h"
@@ -200,7 +201,7 @@ QWidget *MainWindow::buildRestBar()
     layout->addWidget(addEmployee);
     layout->addWidget(addStudent);
 
-    connect(addEmployee, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); addPerson(); });
+    connect(addEmployee, &QPushButton::clicked, this, &MainWindow::openContractBoard);
     connect(addStudent, &QPushButton::clicked, this, &MainWindow::openClassBoard);
     return bar;
 }
@@ -587,6 +588,14 @@ void MainWindow::openClassBoard()
 {
     ClassBoardDialog dialog(m_store, this);
     connect(&dialog, &ClassBoardDialog::changed, this, &MainWindow::refresh);
+    dialog.exec();
+    refresh();
+}
+
+void MainWindow::openContractBoard()
+{
+    ContractBoardDialog dialog(m_store, this);
+    connect(&dialog, &ContractBoardDialog::changed, this, &MainWindow::refresh);
     dialog.exec();
     refresh();
 }
