@@ -28,8 +28,8 @@
 namespace {
 
 constexpr int kMinPasswordLength = 8;
-const QColor kLoginAccent("#f5a524");
-const QColor kRegisterAccent("#e0457b");
+const QList<QColor> kLightColors{QColor("#f5a524"), QColor("#22c3b8"), QColor("#e0457b"),
+                                 QColor("#4a8df0"), QColor("#9b6cf0")};
 
 QString cardStyle(const QColor &accent)
 {
@@ -166,12 +166,12 @@ private:
     }
 
     bool m_lit = false;
-    QColor m_glow = kLoginAccent;
+    QColor m_glow = kLightColors.first();
     std::function<void()> m_onPull;
 };
 
 LoginDialog::LoginDialog(const QString &dataDir, QWidget *parent)
-    : QDialog(parent), m_dataDir(dataDir), m_accent(kLoginAccent)
+    : QDialog(parent), m_dataDir(dataDir), m_accent(kLightColors.first())
 {
     setObjectName(QStringLiteral("loginDialog"));
     setWindowTitle(tr("Pointage"));
@@ -183,7 +183,7 @@ LoginDialog::LoginDialog(const QString &dataDir, QWidget *parent)
 
     m_lamp = new LampWidget(this);
     m_lamp->setGlow(m_accent);
-    m_lamp->setOnPull([this]() { lightUp(); });
+    m_lamp->setOnPull([this]() { onPull(); });
     root->addWidget(m_lamp, 3);
 
     m_card = new QFrame(this);
@@ -323,10 +323,6 @@ void LoginDialog::switchMode(int index)
     m_stack->setCurrentIndex(index);
     m_tabLogin->setChecked(index == 0);
     m_tabRegister->setChecked(index == 1);
-    const QColor accent = index == 0 ? kLoginAccent : kRegisterAccent;
-    applyAccent(accent);
-    if (m_lamp->isLit())
-        animateGlowTo(accent);
 }
 
 void LoginDialog::applyAccent(const QColor &accent)
@@ -347,19 +343,35 @@ void LoginDialog::animateGlowTo(const QColor &color)
     animation->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-void LoginDialog::lightUp()
+void LoginDialog::onPull()
 {
-    if (m_lamp->isLit())
+    ++m_colorIndex;
+    if (m_colorIndex >= kLightColors.size()) {
+        m_colorIndex = -1;
+        m_lamp->setLit(false);
+        m_card->setEnabled(false);
+        auto *fade = new QPropertyAnimation(m_cardEffect, "opacity", this);
+        fade->setDuration(400);
+        fade->setStartValue(m_cardEffect->opacity());
+        fade->setEndValue(0.0);
+        fade->start(QAbstractAnimation::DeleteWhenStopped);
         return;
-    m_lamp->setGlow(m_accent);
-    m_lamp->setLit(true);
-    m_card->setEnabled(true);
+    }
 
-    auto *fade = new QPropertyAnimation(m_cardEffect, "opacity", this);
-    fade->setDuration(600);
-    fade->setStartValue(0.0);
-    fade->setEndValue(1.0);
-    fade->start(QAbstractAnimation::DeleteWhenStopped);
+    const QColor color = kLightColors.at(m_colorIndex);
+    applyAccent(color);
+    if (!m_lamp->isLit()) {
+        m_lamp->setGlow(color);
+        m_lamp->setLit(true);
+        m_card->setEnabled(true);
+        auto *fade = new QPropertyAnimation(m_cardEffect, "opacity", this);
+        fade->setDuration(600);
+        fade->setStartValue(0.0);
+        fade->setEndValue(1.0);
+        fade->start(QAbstractAnimation::DeleteWhenStopped);
+    } else {
+        animateGlowTo(color);
+    }
 }
 
 bool LoginDialog::acceptSession(const SupabaseSession &session, bool remember)
