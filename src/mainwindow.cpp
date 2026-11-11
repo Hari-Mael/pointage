@@ -18,6 +18,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include "classboarddialog.h"
 #include "dashboarddialog.h"
 #include "exporter.h"
 #include "fields.h"
@@ -25,6 +26,7 @@
 #include "presencedialog.h"
 #include "schedule.h"
 #include "settingsdialog.h"
+#include "studentreport.h"
 
 namespace {
 
@@ -199,7 +201,7 @@ QWidget *MainWindow::buildRestBar()
     layout->addWidget(addStudent);
 
     connect(addEmployee, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); addPerson(); });
-    connect(addStudent, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); addPerson(); });
+    connect(addStudent, &QPushButton::clicked, this, &MainWindow::openClassBoard);
     return bar;
 }
 
@@ -379,7 +381,10 @@ void MainWindow::refresh()
         QTableWidgetItem *idItem = makeItem(person.code, Qt::AlignLeft);
         idItem->setData(Qt::UserRole, person.id);
         m_table->setItem(row, kColId, idItem);
-        m_table->setItem(row, kColName, makeItem(person.name, Qt::AlignLeft));
+        const QString displayName = person.className.isEmpty()
+                                        ? person.name
+                                        : QStringLiteral("%1  ·  %2").arg(person.name, person.className);
+        m_table->setItem(row, kColName, makeItem(displayName, Qt::AlignLeft));
 
         for (int day = 1; day <= days; ++day) {
             QTableWidgetItem *cell = makeItem(QString());
@@ -488,6 +493,8 @@ QWidget *MainWindow::makeActionWidget(const QString &personId)
                     [this, personId]() { exportRate(personId, Reports::Rate::Presence); });
     menu->addAction(tr("Taux d'absence"), [this, personId]() { exportRate(personId, Reports::Rate::Absence); });
     menu->addAction(tr("Taux de retard"), [this, personId]() { exportRate(personId, Reports::Rate::Late); });
+    menu->addSeparator();
+    menu->addAction(tr("Rapport élève imprimable (PDF)"), [this, personId]() { openStudentReport(personId); });
     reportButton->setMenu(menu);
 
     layout->addWidget(editPersonButton);
@@ -557,7 +564,7 @@ void MainWindow::editPerson(const QString &personId)
 
     QStringList codes;
     for (const CloudPerson &person : m_all) {
-        if (person.kind == original.kind && person.id != original.id)
+        if (person.kind == original.kind && person.className == original.className && person.id != original.id)
             codes << person.code;
     }
 
@@ -574,6 +581,25 @@ void MainWindow::editPerson(const QString &personId)
     updated.fields = edited.fields;
     reportWriteResult(m_store.updatePerson(updated), tr("Modification de la fiche"));
     refresh();
+}
+
+void MainWindow::openClassBoard()
+{
+    ClassBoardDialog dialog(m_store, this);
+    connect(&dialog, &ClassBoardDialog::changed, this, &MainWindow::refresh);
+    dialog.exec();
+    refresh();
+}
+
+void MainWindow::openStudentReport(const QString &personId)
+{
+    const CloudPerson *person = findPerson(personId);
+    if (!person)
+        return;
+    const QString schoolName = QStringLiteral("Établissement");
+    StudentReportDialog dialog(*person, m_marks.value(personId), selectedYear(), selectedMonth(), m_restMask,
+                               QDate::currentDate(), schoolName, this);
+    dialog.exec();
 }
 
 void MainWindow::importRoster()
