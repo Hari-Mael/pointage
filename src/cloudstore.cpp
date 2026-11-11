@@ -86,7 +86,8 @@ bool CloudStore::send(const QByteArray &method, const QString &path, const QByte
 bool CloudStore::fetchPeople(std::vector<CloudPerson> &people)
 {
     QByteArray response;
-    if (!send("GET", QStringLiteral("/rest/v1/persons?select=id,kind,code,name,fields&order=code"), {}, {}, response))
+    if (!send("GET", QStringLiteral("/rest/v1/persons?select=id,kind,code,name,class_name,fields&order=code"), {}, {},
+              response))
         return false;
 
     people.clear();
@@ -97,6 +98,7 @@ bool CloudStore::fetchPeople(std::vector<CloudPerson> &people)
         person.kind = row.value(QLatin1String("kind")).toInt();
         person.code = row.value(QLatin1String("code")).toString();
         person.name = row.value(QLatin1String("name")).toString();
+        person.className = row.value(QLatin1String("class_name")).toString();
         for (const QJsonValue &field : row.value(QLatin1String("fields")).toArray())
             person.fields << field.toString();
         people.push_back(person);
@@ -147,6 +149,7 @@ bool CloudStore::addPerson(const CloudPerson &person)
                            {"kind", person.kind},
                            {"code", person.code},
                            {"name", person.name},
+                           {"class_name", person.className},
                            {"fields", fields}};
     QByteArray response;
     return send("POST", QStringLiteral("/rest/v1/persons"), QJsonDocument(body).toJson(QJsonDocument::Compact),
@@ -158,7 +161,10 @@ bool CloudStore::updatePerson(const CloudPerson &person)
     QJsonArray fields;
     for (const QString &field : person.fields)
         fields.append(field);
-    const QJsonObject body{{"code", person.code}, {"name", person.name}, {"fields", fields}};
+    const QJsonObject body{{"code", person.code},
+                           {"name", person.name},
+                           {"class_name", person.className},
+                           {"fields", fields}};
     QByteArray response;
     return send("PATCH", QStringLiteral("/rest/v1/persons?id=eq.%1").arg(person.id),
                 QJsonDocument(body).toJson(QJsonDocument::Compact), "return=minimal", response);
