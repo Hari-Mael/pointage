@@ -9,8 +9,10 @@
 #include <QPushButton>
 #include <QTextBrowser>
 #include <QTextDocument>
+#include <QUrl>
 #include <QVBoxLayout>
 
+#include "photo.h"
 #include "reports.h"
 
 namespace {
@@ -68,6 +70,10 @@ QString toHtml(const CloudPerson &person, const CloudMarks &marks, int year, int
                          french.dayName(date.dayOfWeek(), QLocale::LongFormat), status.toHtmlEscaped());
     }
 
+    const QString photoHtml = person.photo.isEmpty()
+                                  ? QString()
+                                  : QStringLiteral("<img src=\"avatar\" width=\"96\" height=\"96\" align=\"right\">");
+
     return QStringLiteral(
                "<html><head><style>"
                "body { font-family: 'Segoe UI', Arial, sans-serif; color: #1d2733; }"
@@ -104,7 +110,8 @@ QString toHtml(const CloudPerson &person, const CloudMarks &marks, int year, int
         .arg(stats.absent)
         .arg(stats.unmarked)
         .arg(percentText(stats.absenceRate()), percentText(stats.lateRate()), rows,
-             french.toString(QDate::currentDate(), QStringLiteral("dd MMMM yyyy")));
+             french.toString(QDate::currentDate(), QStringLiteral("dd MMMM yyyy")))
+        .replace(QStringLiteral("<body>"), QStringLiteral("<body>") + photoHtml);
 }
 
 }
@@ -118,6 +125,9 @@ StudentReportDialog::StudentReportDialog(const CloudPerson &person, const CloudM
 
     auto *layout = new QVBoxLayout(this);
     m_view = new QTextBrowser(this);
+    if (!person.photo.isEmpty())
+        m_view->document()->addResource(QTextDocument::ImageResource, QUrl(QStringLiteral("avatar")),
+                                        Photo::decode(person.photo));
     m_view->setHtml(StudentReport::toHtml(person, marks, year, month, restMask, today, schoolName));
     layout->addWidget(m_view, 1);
 
