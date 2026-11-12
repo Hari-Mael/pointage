@@ -15,6 +15,11 @@ QString isoNow()
     return QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
 }
 
+QString monthPattern(int year, int month)
+{
+    return QStringLiteral("%1-%2-%").arg(year).arg(month, 2, 10, QLatin1Char('0'));
+}
+
 }
 
 LocalDb::~LocalDb()
@@ -87,21 +92,24 @@ bool LocalDb::enqueue(const QString &kind, const QJsonObject &payload)
                 {kind, QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact)), isoNow()});
 }
 
-bool LocalDb::upsertPerson(const QJsonObject &person)
+bool LocalDb::writePerson(const QJsonObject &person) const
 {
-    const QString id = person.value(QStringLiteral("id")).toString();
     const QString fields = QString::fromUtf8(QJsonDocument(person.value(QStringLiteral("fields")).toArray())
                                                  .toJson(QJsonDocument::Compact));
-    const bool ok = exec(QStringLiteral(
-                             "INSERT INTO persons (id, kind, code, name, class_name, photo, fields, updated_at, deleted) "
-                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, "
-                             "code=excluded.code, name=excluded.name, class_name=excluded.class_name, photo=excluded.photo, "
-                             "fields=excluded.fields, updated_at=excluded.updated_at, deleted=0"),
-                         {id, person.value(QStringLiteral("kind")).toInt(), person.value(QStringLiteral("code")).toString(),
-                          person.value(QStringLiteral("name")).toString(),
-                          person.value(QStringLiteral("class_name")).toString(),
-                          person.value(QStringLiteral("photo")).toString(), fields, isoNow()});
-    return ok && enqueue(QStringLiteral("person.upsert"), person);
+    return exec(QStringLiteral(
+                    "INSERT INTO persons (id, kind, code, name, class_name, photo, fields, updated_at, deleted) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, "
+                    "code=excluded.code, name=excluded.name, class_name=excluded.class_name, photo=excluded.photo, "
+                    "fields=excluded.fields, updated_at=excluded.updated_at, deleted=0"),
+                {person.value(QStringLiteral("id")).toString(), person.value(QStringLiteral("kind")).toInt(),
+                 person.value(QStringLiteral("code")).toString(), person.value(QStringLiteral("name")).toString(),
+                 person.value(QStringLiteral("class_name")).toString(), person.value(QStringLiteral("photo")).toString(),
+                 fields, isoNow()});
+}
+
+bool LocalDb::upsertPerson(const QJsonObject &person)
+{
+    return writePerson(person) && enqueue(QStringLiteral("person.upsert"), person);
 }
 
 bool LocalDb::deletePerson(const QString &personId)
@@ -146,6 +154,40 @@ bool LocalDb::setAvatar(const QString &avatar)
            && enqueue(QStringLiteral("settings.avatar"), QJsonObject{{QStringLiteral("avatar"), avatar}});
 }
 
+bool LocalDb::storeRemotePerson(const QJsonObject &person)
+{
+    return writePerson(person);
+}
+
+bool LocalDb::purgePersonsExcept(const QStringList &ids)
+{
+    QJsonArray array;
+    for (const QString &id : ids)
+        array.append(id);
+    const QString json = QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+    return exec(QStringLiteral("DELETE FROM persons WHERE id NOT IN (SELECT value FROM json_each(?))"), {json});
+}
+
+bool LocalDb::replaceMarksOfMonth(int year, int month, const QJsonArray &rows)
+{
+    if (!exec(QStringLiteral("DELETE FROM marks WHERE day LIKE ?"), {monthPattern(year, month)}))
+        return false;
+    for (const QJsonValue &value : rows) {
+        const QJsonObject row = value.toObject();
+        if (!exec(QStringLiteral("INSERT INTO marks (person_id, day, status, updated_at) VALUES (?, ?, ?, ?) "
+                                 "ON CONFLICT(person_id, day) DO UPDATE SET status=excluded.status, updated_at=excluded.updated_at"),
+                  {row.value(QStringLiteral("person_id")).toString(), row.value(QStringLiteral("day")).toString(),
+                   row.value(QStringLiteral("status")).toString(), isoNow()}))
+            return false;
+    }
+    return true;
+}
+
+bool LocalDb::storeRemoteSettings(int restMask, const QString &avatar)
+{
+    return exec(QStringLiteral("UPDATE settings SET rest_mask = ?, avatar = ? WHERE id = 1"), {restMask, avatar});
+}
+
 QJsonArray LocalDb::persons() const
 {
     QJsonArray result;
@@ -164,16 +206,18 @@ QJsonArray LocalDb::persons() const
     return result;
 }
 
-QJsonObject LocalDb::marksOf(const QString &personId) const
+QJsonArray LocalDb::marksForMonth(int year, int month) const
 {
-    QJsonObject result;
+    QJsonArray result;
     QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare(QStringLiteral("SELECT day, status FROM marks WHERE person_id = ?"));
-    query.addBindValue(personId);
+    query.prepare(QStringLiteral("SELECT person_id, day, status FROM marks WHERE day LIKE ?"));
+    query.addBindValue(monthPattern(year, month));
     query.exec();
     while (query.next()) {
-        const QDate day = QDate::fromString(query.value(0).toString(), Qt::ISODate);
-        result.insert(QString::number(day.day()), query.value(1).toString());
+        const QDate day = QDate::fromString(query.value(1).toString(), Qt::ISODate);
+        result.append(QJsonObject{{QStringLiteral("person_id"), query.value(0).toString()},
+                                  {QStringLiteral("day"), day.day()},
+                                  {QStringLiteral("status"), query.value(2).toString()}});
     }
     return result;
 }
