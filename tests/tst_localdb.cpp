@@ -13,6 +13,7 @@ private slots:
     void marksAndSettingsAreQueued();
     void accountsAreIsolated();
     void syncedOperationsLeaveTheQueue();
+    void remoteStateReplacesLocalCopy();
 };
 
 namespace {
@@ -55,9 +56,9 @@ void TstLocalDb::marksAndSettingsAreQueued()
 
     QVERIFY(db.setMark(QStringLiteral("p1"), QDate(2026, 11, 3), QChar('P')));
     QVERIFY(db.setMark(QStringLiteral("p1"), QDate(2026, 11, 4), QChar('R')));
-    QCOMPARE(db.marksOf(QStringLiteral("p1")).value(QStringLiteral("3")).toString(), QStringLiteral("P"));
     QVERIFY(db.setMark(QStringLiteral("p1"), QDate(2026, 11, 3), QChar()));
-    QCOMPARE(db.marksOf(QStringLiteral("p1")).contains(QStringLiteral("3")), false);
+    QCOMPARE(db.marksForMonth(2026, 11).size(), 1);
+    QCOMPARE(db.marksForMonth(2026, 11).first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("R"));
     QVERIFY(db.setRestMask(65));
     QCOMPARE(db.restMask(), 65);
     QCOMPARE(db.pendingCount(), 4);
@@ -98,6 +99,34 @@ void TstLocalDb::syncedOperationsLeaveTheQueue()
     QVERIFY(db.markSynced(ops.first().seq));
     QCOMPARE(db.pendingCount(), 1);
     QCOMPARE(db.avatar(), QStringLiteral("abc"));
+}
+
+void TstLocalDb::remoteStateReplacesLocalCopy()
+{
+    QTemporaryDir dir;
+    LocalDb db;
+    QString error;
+    QVERIFY2(db.open(dir.path(), QStringLiteral("userD"), error), qPrintable(error));
+
+    QVERIFY(db.storeRemotePerson(samplePerson(QStringLiteral("p1"), QStringLiteral("E001"))));
+    QVERIFY(db.storeRemotePerson(samplePerson(QStringLiteral("p2"), QStringLiteral("E002"))));
+    QCOMPARE(db.persons().size(), 2);
+    QCOMPARE(db.pendingCount(), 0);
+
+    QVERIFY(db.purgePersonsExcept({QStringLiteral("p2")}));
+    QCOMPARE(db.persons().size(), 1);
+
+    QJsonArray rows;
+    rows.append(QJsonObject{{QStringLiteral("person_id"), QStringLiteral("p2")},
+                            {QStringLiteral("day"), QStringLiteral("2026-11-03")},
+                            {QStringLiteral("status"), QStringLiteral("P")}});
+    QVERIFY(db.replaceMarksOfMonth(2026, 11, rows));
+    QCOMPARE(db.marksForMonth(2026, 11).size(), 1);
+
+    QVERIFY(db.storeRemoteSettings(9, QStringLiteral("x")));
+    QCOMPARE(db.restMask(), 9);
+    QCOMPARE(db.avatar(), QStringLiteral("x"));
+    QCOMPARE(db.pendingCount(), 0);
 }
 
 QTEST_MAIN(TstLocalDb)
