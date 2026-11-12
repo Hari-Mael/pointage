@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 struct LocalOp {
     qint64 seq = 0;
@@ -30,8 +31,13 @@ public:
     bool setRestMask(int mask);
     bool setAvatar(const QString &avatar);
 
+    bool storeRemotePerson(const QJsonObject &person);
+    bool purgePersonsExcept(const QStringList &ids);
+    bool replaceMarksOfMonth(int year, int month, const QJsonArray &rows);
+    bool storeRemoteSettings(int restMask, const QString &avatar);
+
     QJsonArray persons() const;
-    QJsonObject marksOf(const QString &personId) const;
+    QJsonArray marksForMonth(int year, int month) const;
     int restMask() const;
     QString avatar() const;
 
@@ -42,6 +48,7 @@ public:
 private:
     bool enqueue(const QString &kind, const QJsonObject &payload);
     bool exec(const QString &sql, const QVariantList &values = {}) const;
+    bool writePerson(const QJsonObject &person) const;
 
     QString m_connection;
 };
