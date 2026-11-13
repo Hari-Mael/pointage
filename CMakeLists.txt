@@ -7,10 +7,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-if(MSVC)
-    add_compile_options(/utf-8)
-endif()
-
 # QXlsx a besoin des en-têtes privés de QtGui. Le paquet Qt installé par aqtinstall
 # ne fournit pas toujours la configuration CMake correspondante : on utilise la nôtre.
 set(Qt6GuiPrivate_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/shim")
@@ -84,6 +80,10 @@ add_executable(pointage
     src/appstyle.cpp
     src/localdb.h
     src/localdb.cpp
+    src/schoolinfo.h
+    src/schoolinfo.cpp
+    src/headerbar.h
+    src/headerbar.cpp
     resources/resources.qrc
 )
 
@@ -94,12 +94,10 @@ endif()
 target_link_libraries(pointage PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network Qt6::Charts Qt6::PrintSupport QXlsx::QXlsx)
 if(WIN32)
     target_link_libraries(pointage PRIVATE Crypt32)
-    set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 target_compile_definitions(pointage PRIVATE POINTAGE_VERSION="${PROJECT_VERSION}")
 
 enable_testing()
-
 add_executable(tst_rules
     tests/tst_rules.cpp
     src/auth.cpp
@@ -117,6 +115,10 @@ add_executable(tst_export
 target_include_directories(tst_export PRIVATE src)
 target_link_libraries(tst_export PRIVATE Qt6::Test Qt6::Network)
 add_test(NAME export COMMAND tst_export)
+
+if(WIN32)
+    set_target_properties(pointage PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
 
 add_executable(tst_reports
     tests/tst_reports.cpp
