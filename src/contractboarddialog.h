@@ -13,11 +13,11 @@ class QPushButton;
 class ContractList : public QListWidget {
     Q_OBJECT
 public:
-    explicit ContractList(const QString &contract, QWidget *parent = nullptr);
-    QString contract() const { return m_contract; }
+    explicit ContractList(const QString &column, QWidget *parent = nullptr);
+    QString column() const { return m_column; }
 
 signals:
-    void personDropped(const QString &personId, const QString &targetContract);
+    void personDropped(const QString &personId, const QString &targetColumn);
 
 protected:
     QStringList mimeTypes() const override;
@@ -29,7 +29,7 @@ protected:
 private:
     bool accepts(const QMimeData *data, const QObject *source) const;
 
-    QString m_contract;
+    QString m_column;
 };
 
 class ContractBoardDialog : public QDialog {
@@ -41,10 +41,10 @@ signals:
     void changed();
 
 private:
-    QWidget *makeColumn(const QString &contract, const QString &title);
+    QWidget *makeColumn(const QString &column);
     void reload();
-    void onPersonDropped(const QString &personId, const QString &targetContract);
-    void onAddEmployee(const QString &contract);
+    void onPersonDropped(const QString &personId, const QString &targetColumn);
+    void onAddEmployee(const QString &column);
     void undoLastMove();
     const CloudPerson *findEmployee(const QString &personId) const;
 
