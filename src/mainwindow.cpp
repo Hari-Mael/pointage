@@ -24,10 +24,12 @@
 #include "dashboarddialog.h"
 #include "exporter.h"
 #include "fields.h"
+#include "headerbar.h"
 #include "persondialog.h"
 #include "photo.h"
 #include "presencedialog.h"
 #include "schedule.h"
+#include "schoolinfo.h"
 #include "settingsdialog.h"
 #include "studentreport.h"
 
@@ -127,58 +129,22 @@ void MainWindow::buildUi()
 
 QWidget *MainWindow::buildHeader()
 {
-    QFrame *card = makeCard(this);
-    auto *layout = new QHBoxLayout(card);
-    layout->setContentsMargins(18, 14, 18, 14);
-    layout->setSpacing(12);
-
-    auto *titles = new QVBoxLayout;
-    auto *title = new QLabel(QStringLiteral("📋 Feuille de Pointage Pro"), card);
-    title->setObjectName(QStringLiteral("title"));
-    auto *subtitle = new QLabel(QStringLiteral("%1 · %2").arg(m_userName, m_userEmail), card);
-    subtitle->setObjectName(QStringLiteral("subtitle"));
-    titles->addWidget(title);
-    titles->addWidget(subtitle);
-    layout->addLayout(titles, 1);
-
-    const QLocale french(QLocale::French);
-    m_monthBox = new QComboBox(card);
-    for (int month = 1; month <= 12; ++month)
-        m_monthBox->addItem(french.monthName(month));
-    m_yearBox = new QSpinBox(card);
-    m_yearBox->setRange(2000, 2100);
+    m_header = new HeaderBar(m_userName, m_userEmail, Photo::avatar(m_userAvatar, m_userName, 40));
+    m_monthBox = m_header->monthBox();
+    m_yearBox = m_header->yearBox();
+    m_avatarButton = m_header->avatarButton();
 
     const QDate today = QDate::currentDate();
     m_monthBox->setCurrentIndex(today.month() - 1);
     m_yearBox->setValue(today.year());
 
-    auto *monthLabel = new QLabel(tr("Mois :"), card);
-    monthLabel->setObjectName(QStringLiteral("muted"));
-    layout->addWidget(monthLabel);
-    layout->addWidget(m_monthBox);
-    layout->addWidget(m_yearBox);
-
-    m_avatarButton = new QPushButton(card);
-    m_avatarButton->setFlat(true);
-    m_avatarButton->setIconSize(QSize(44, 44));
-    m_avatarButton->setToolTip(tr("Photo de profil"));
-    refreshAvatar();
-    layout->addWidget(m_avatarButton);
-    connect(m_avatarButton, &QPushButton::clicked, this, &MainWindow::changeUserAvatar);
-
-    auto *dashboardButton = new QPushButton(tr("Tableau de bord"), card);
-    dashboardButton->setProperty("variant", QStringLiteral("teal"));
-    layout->addWidget(dashboardButton);
-    connect(dashboardButton, &QPushButton::clicked, this, &MainWindow::openDashboard);
-
-    auto *settingsButton = new QPushButton(tr("Paramètres"), card);
-    settingsButton->setProperty("variant", QStringLiteral("ghost"));
-    layout->addWidget(settingsButton);
-    connect(settingsButton, &QPushButton::clicked, this, &MainWindow::openSettings);
-
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
-    return card;
+    connect(m_avatarButton, &QPushButton::clicked, this, &MainWindow::changeUserAvatar);
+    connect(m_header, &HeaderBar::dashboardRequested, this, &MainWindow::openDashboard);
+    connect(m_header, &HeaderBar::settingsRequested, this, &MainWindow::openSettings);
+    connect(m_header, &HeaderBar::homeRequested, this, [this]() { refresh(); });
+    return m_header;
 }
 
 QWidget *MainWindow::buildRestBar()
@@ -389,8 +355,9 @@ void MainWindow::refresh()
         QTableWidgetItem *idItem = makeItem(person.code, Qt::AlignLeft);
         idItem->setData(Qt::UserRole, person.id);
         m_table->setItem(row, kColId, idItem);
-        const QString displayName = person.className.isEmpty() ? person.name
-                                                                : QStringLiteral("%1  ·  %2").arg(person.name, person.className);
+        const QString displayName = person.className.isEmpty()
+                                        ? person.name
+                                        : QStringLiteral("%1  ·  %2").arg(person.name, person.className);
         QTableWidgetItem *nameItem = makeItem(displayName, Qt::AlignLeft);
         nameItem->setIcon(QIcon(Photo::avatar(person.photo, person.name, 30)));
         m_table->setItem(row, kColName, nameItem);
@@ -428,6 +395,8 @@ void MainWindow::refresh()
     m_statEmp->setText(tr("Employés : %1").arg(employees));
     m_statStu->setText(tr("Élèves : %1").arg(students));
     applySearch();
+    m_header->setPendingCount(m_store.pendingChanges());
+    m_header->setSubtitle(tr("Créneaux : %1").arg(Schedule::load().summary()));
     if (m_dashboard && m_dashboard->isVisible())
         m_dashboard->setSnapshot(buildSnapshot());
 }
@@ -616,7 +585,7 @@ void MainWindow::openStudentReport(const QString &personId)
     const CloudPerson *person = findPerson(personId);
     if (!person)
         return;
-    const QString schoolName = QStringLiteral("Établissement");
+    const QString schoolName = SchoolInfo::name();
     StudentReportDialog dialog(*person, m_marks.value(personId), selectedYear(), selectedMonth(), m_restMask,
                                QDate::currentDate(), schoolName, this);
     dialog.exec();
