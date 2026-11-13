@@ -84,6 +84,8 @@ add_executable(pointage
     src/schoolinfo.cpp
     src/headerbar.h
     src/headerbar.cpp
+    src/pipelinecards.h
+    src/pipelinecards.cpp
     resources/resources.qrc
 )
 
