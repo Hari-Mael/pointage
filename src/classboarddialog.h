@@ -9,7 +9,6 @@
 
 class QLabel;
 class QPushButton;
-class QVBoxLayout;
 
 class ClassList : public QListWidget {
     Q_OBJECT
@@ -43,17 +42,16 @@ signals:
 
 private:
     void reload();
+    QWidget *makeColumn(const QString &className);
     void onPersonDropped(const QString &personId, const QString &targetClass);
     void onAddStudent(const QString &className);
     void undoLastMove();
     const CloudPerson *findStudent(const QString &personId) const;
-    QWidget *makeColumn(const QString &className);
 
     CloudStore &m_store;
     std::vector<CloudPerson> m_students;
     QMap<QString, ClassList *> m_lists;
     QMap<QString, QLabel *> m_counts;
-    QVBoxLayout *m_columnsLayout = nullptr;
     QLabel *m_undoLabel = nullptr;
     QPushButton *m_undoButton = nullptr;
     QString m_undoPersonId;
