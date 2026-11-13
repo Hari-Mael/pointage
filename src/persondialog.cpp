@@ -4,11 +4,13 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
 
 #include "fields.h"
@@ -46,9 +48,19 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
 {
     const KindDef &def = kindDef(kind);
     setWindowTitle(tr("Fiche %1").arg(def.singular));
-    resize(460, 680);
+    resize(540, 720);
+    setMinimumSize(480, 480);
 
     auto *layout = new QVBoxLayout(this);
+
+    auto *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto *content = new QWidget(scroll);
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(4, 4, 12, 4);
+    scroll->setWidget(content);
+    layout->addWidget(scroll, 1);
 
     auto *photoRow = new QHBoxLayout;
     m_preview = new QLabel(this);
@@ -64,7 +76,7 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
     photoButtons->addStretch(1);
     photoRow->addWidget(m_preview);
     photoRow->addLayout(photoButtons, 1);
-    layout->addLayout(photoRow);
+    contentLayout->addLayout(photoRow);
     connect(choose, &QPushButton::clicked, this, &PersonDialog::choosePhoto);
     connect(remove, &QPushButton::clicked, this, &PersonDialog::removePhoto);
 
@@ -84,7 +96,8 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
         if (auto *edit = qobject_cast<QLineEdit *>(input))
             connect(edit, &QLineEdit::textChanged, this, &PersonDialog::refreshPreview);
     }
-    layout->addLayout(form);
+    contentLayout->addLayout(form);
+    contentLayout->addStretch(1);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     layout->addWidget(buttons);
