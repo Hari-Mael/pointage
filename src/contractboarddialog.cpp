@@ -3,7 +3,6 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
-#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -14,43 +13,70 @@
 
 #include "fields.h"
 #include "persondialog.h"
+#include "pipelinecards.h"
 
 namespace {
 
 const char *const kPersonMime = "application/x-pointage-person";
 const char *const kContractLabel = "Type de contrat";
+const char *const kPosteLabel = "Poste";
 
-const QStringList kColumns{QStringLiteral("CDI"), QStringLiteral("CDD"), QStringLiteral("Intérim")};
+const QString kCdi = QStringLiteral("CDI");
+const QString kCdd = QStringLiteral("CDD");
+const QString kOther = QStringLiteral("Stage / Autre");
+const QStringList kColumns{kCdi, kCdd, kOther};
 
-int contractIndex()
+int indexOfField(const char *label)
 {
     const auto &fields = kindDef(kKindEmployee).fields;
     for (size_t i = 0; i < fields.size(); ++i) {
-        if (fields[i].label == QLatin1String(kContractLabel))
+        if (fields[i].label == QLatin1String(label))
             return static_cast<int>(i);
     }
     return -1;
 }
 
-QString contractOf(const CloudPerson &person)
+QString fieldOf(const CloudPerson &person, const char *label)
 {
-    const int index = contractIndex();
+    const int index = indexOfField(label);
     return (index >= 0 && index < person.fields.size()) ? person.fields.at(index) : QString();
 }
 
-void setContract(CloudPerson &person, const QString &contract)
+void setField(CloudPerson &person, const char *label, const QString &value)
 {
-    const int index = contractIndex();
+    const int index = indexOfField(label);
     if (index < 0)
         return;
     while (person.fields.size() <= index)
         person.fields << QString();
-    person.fields[index] = contract;
+    person.fields[index] = value;
 }
 
 QString columnFor(const QString &contract)
 {
-    return kColumns.contains(contract) ? contract : QString();
+    if (contract == kCdi)
+        return kCdi;
+    if (contract == kCdd)
+        return kCdd;
+    return kOther;
+}
+
+QString contractFor(const QString &column)
+{
+    if (column == kCdi)
+        return kCdi;
+    if (column == kCdd)
+        return kCdd;
+    return QStringLiteral("Stage");
+}
+
+CardTone toneFor(const QString &column)
+{
+    if (column == kCdi)
+        return {QColor("#1f6b4f"), QColor("#ffffff"), QColor("#1f6b4f")};
+    if (column == kCdd)
+        return {QColor("#f5c542"), QColor("#1d1d1f"), QColor("#f5c542")};
+    return {QColor("#e8553d"), QColor("#ffffff"), QColor("#e8553d")};
 }
 
 QString nextEmployeeCode(const std::vector<CloudPerson> &people)
@@ -70,15 +96,18 @@ QString nextEmployeeCode(const std::vector<CloudPerson> &people)
 
 }
 
-ContractList::ContractList(const QString &contract, QWidget *parent)
-    : QListWidget(parent), m_contract(contract)
+ContractList::ContractList(const QString &column, QWidget *parent)
+    : QListWidget(parent), m_column(column)
 {
     setDragEnabled(true);
     setAcceptDrops(true);
     setDragDropMode(QAbstractItemView::DragDrop);
     setDefaultDropAction(Qt::CopyAction);
     setSelectionMode(QAbstractItemView::SingleSelection);
-    setMinimumWidth(190);
+    setFrameShape(QFrame::NoFrame);
+    setSpacing(8);
+    setStyleSheet(QStringLiteral("QListWidget { background: transparent; border: none; }"
+                                 "QListWidget::item { background: transparent; border: none; }"));
 }
 
 bool ContractList::accepts(const QMimeData *data, const QObject *source) const
@@ -124,14 +153,15 @@ void ContractList::dropEvent(QDropEvent *event)
     const QString personId = QString::fromUtf8(event->mimeData()->data(QLatin1String(kPersonMime)));
     event->setDropAction(Qt::CopyAction);
     event->accept();
-    emit personDropped(personId, m_contract);
+    emit personDropped(personId, m_column);
 }
 
 ContractBoardDialog::ContractBoardDialog(CloudStore &store, QWidget *parent)
     : QDialog(parent), m_store(store)
 {
     setWindowTitle(tr("Employés par type de contrat"));
-    resize(1000, 620);
+    resize(1000, 640);
+    setStyleSheet(QStringLiteral("QDialog { background: #f6f1e6; }"));
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(10);
@@ -144,12 +174,13 @@ ContractBoardDialog::ContractBoardDialog(CloudStore &store, QWidget *parent)
 
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
+    scroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; border: none; }"));
     auto *content = new QWidget(scroll);
+    content->setStyleSheet(QStringLiteral("background: transparent;"));
     auto *row = new QHBoxLayout(content);
-    row->setSpacing(12);
-    for (const QString &contract : kColumns)
-        row->addWidget(makeColumn(contract, contract));
-    row->addWidget(makeColumn(QString(), tr("Autres / sans contrat")));
+    row->setSpacing(14);
+    for (const QString &column : kColumns)
+        row->addWidget(makeColumn(column));
     row->addStretch(1);
     scroll->setWidget(content);
     layout->addWidget(scroll, 1);
@@ -176,31 +207,23 @@ ContractBoardDialog::ContractBoardDialog(CloudStore &store, QWidget *parent)
     reload();
 }
 
-QWidget *ContractBoardDialog::makeColumn(const QString &contract, const QString &title)
+QWidget *ContractBoardDialog::makeColumn(const QString &column)
 {
-    auto *column = new QFrame(this);
-    column->setObjectName(QStringLiteral("card"));
-    auto *layout = new QVBoxLayout(column);
-    layout->setContentsMargins(10, 10, 10, 10);
+    const CardTone tone = toneFor(column);
+    ColumnParts parts = PipelineCards::makeColumn(column, tone.dot, this);
+    m_counts.insert(column, parts.count);
 
-    auto *header = new QLabel(title, column);
-    header->setObjectName(QStringLiteral("title"));
-    auto *count = new QLabel(column);
-    count->setObjectName(QStringLiteral("muted"));
-    m_counts.insert(contract, count);
-    layout->addWidget(header);
-    layout->addWidget(count);
-
-    auto *list = new ContractList(contract, column);
-    m_lists.insert(contract, list);
+    auto *list = new ContractList(column, parts.frame);
+    list->setMinimumHeight(360);
+    m_lists.insert(column, list);
     connect(list, &ContractList::personDropped, this, &ContractBoardDialog::onPersonDropped);
-    layout->addWidget(list, 1);
+    parts.layout->addWidget(list, 1);
 
-    auto *add = new QPushButton(tr("+ Ajouter un employé"), column);
-    add->setProperty("variant", QStringLiteral("ghost"));
-    layout->addWidget(add);
-    connect(add, &QPushButton::clicked, this, [this, contract]() { onAddEmployee(contract); });
-    return column;
+    auto *add = new QPushButton(tr("+ Ajouter un employé"), parts.frame);
+    add->setProperty("variant", QStringLiteral("teal"));
+    parts.layout->addWidget(add);
+    connect(add, &QPushButton::clicked, this, [this, column]() { onAddEmployee(column); });
+    return parts.frame;
 }
 
 void ContractBoardDialog::reload()
@@ -217,16 +240,22 @@ void ContractBoardDialog::reload()
     }
 
     for (auto it = m_lists.begin(); it != m_lists.end(); ++it) {
-        it.value()->clear();
+        ContractList *list = it.value();
+        list->clear();
+        const CardTone tone = toneFor(it.key());
         int count = 0;
         for (const CloudPerson &person : m_employees) {
-            if (columnFor(contractOf(person)) != it.key())
+            if (columnFor(fieldOf(person, kContractLabel)) != it.key())
                 continue;
-            auto *item = new QListWidgetItem(QStringLiteral("%1 · %2").arg(person.code, person.name), it.value());
+            const QString poste = fieldOf(person, kPosteLabel);
+            auto *item = new QListWidgetItem(list);
             item->setData(Qt::UserRole, person.id);
+            item->setSizeHint(QSize(0, 66));
+            list->setItemWidget(item, PipelineCards::personCard(person, poste.isEmpty() ? person.code : poste,
+                                                                tone, list));
             ++count;
         }
-        m_counts.value(it.key())->setText(tr("%1 employé(s)").arg(count));
+        m_counts.value(it.key())->setText(QString::number(count));
     }
 }
 
@@ -239,16 +268,19 @@ const CloudPerson *ContractBoardDialog::findEmployee(const QString &personId) co
     return nullptr;
 }
 
-void ContractBoardDialog::onPersonDropped(const QString &personId, const QString &targetContract)
+void ContractBoardDialog::onPersonDropped(const QString &personId, const QString &targetColumn)
 {
     const CloudPerson *found = findEmployee(personId);
-    if (!found || columnFor(contractOf(*found)) == targetContract)
+    if (!found)
+        return;
+    const QString currentColumn = columnFor(fieldOf(*found, kContractLabel));
+    if (currentColumn == targetColumn)
         return;
 
     const CloudPerson moved = *found;
-    const QString previous = contractOf(moved);
+    const QString previous = fieldOf(moved, kContractLabel);
     CloudPerson updated = moved;
-    setContract(updated, targetContract);
+    setField(updated, kContractLabel, contractFor(targetColumn));
     if (!m_store.updatePerson(updated)) {
         QMessageBox::warning(this, windowTitle(), tr("Changement impossible : %1").arg(m_store.lastError()));
         return;
@@ -256,7 +288,7 @@ void ContractBoardDialog::onPersonDropped(const QString &personId, const QString
 
     m_undoPersonId = moved.id;
     m_undoPreviousContract = previous;
-    m_undoLabel->setText(tr("%1 passe en %2.").arg(moved.name, targetContract.isEmpty() ? tr("Autres") : targetContract));
+    m_undoLabel->setText(tr("%1 passe en %2.").arg(moved.name, targetColumn));
     m_undoLabel->show();
     m_undoButton->show();
     reload();
@@ -269,7 +301,7 @@ void ContractBoardDialog::undoLastMove()
     if (!found)
         return;
     CloudPerson restored = *found;
-    setContract(restored, m_undoPreviousContract);
+    setField(restored, kContractLabel, m_undoPreviousContract);
     if (!m_store.updatePerson(restored)) {
         QMessageBox::warning(this, windowTitle(), tr("Annulation impossible : %1").arg(m_store.lastError()));
         return;
@@ -280,22 +312,21 @@ void ContractBoardDialog::undoLastMove()
     emit changed();
 }
 
-void ContractBoardDialog::onAddEmployee(const QString &contract)
+void ContractBoardDialog::onAddEmployee(const QString &column)
 {
     QStringList codes;
     for (const CloudPerson &person : m_employees)
         codes << person.code;
 
     PersonDialog dialog(kKindEmployee, nextEmployeeCode(m_employees), codes, this);
-    if (!contract.isEmpty()) {
-        const int index = contractIndex();
-        QStringList preset;
-        for (size_t i = 0; i < kindDef(kKindEmployee).fields.size(); ++i)
-            preset << QString();
-        if (index >= 0)
-            preset[index] = contract;
-        dialog.setValues(preset);
-    }
+    QStringList preset;
+    for (size_t i = 0; i < kindDef(kKindEmployee).fields.size(); ++i)
+        preset << QString();
+    const int index = indexOfField(kContractLabel);
+    if (index >= 0)
+        preset[index] = contractFor(column);
+    dialog.setValues(preset);
+
     if (dialog.exec() != QDialog::Accepted)
         return;
 
