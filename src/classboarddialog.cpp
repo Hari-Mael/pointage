@@ -3,7 +3,6 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
-#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -14,12 +13,26 @@
 
 #include "fields.h"
 #include "persondialog.h"
+#include "pipelinecards.h"
 #include "schoolclasses.h"
 
 namespace {
 
 const char *const kPersonMime = "application/x-pointage-person";
 const char *const kUnassigned = "";
+
+CardTone classTone(const QString &className)
+{
+    if (className.isEmpty())
+        return {QColor("#ffffff"), QColor("#1d1d1f"), QColor("#9aa5b1")};
+    if (className.startsWith(QLatin1Char('5')))
+        return {QColor("#f5c542"), QColor("#1d1d1f"), QColor("#f5c542")};
+    if (className.startsWith(QLatin1Char('4')))
+        return {QColor("#1f6b4f"), QColor("#ffffff"), QColor("#1f6b4f")};
+    if (className.startsWith(QLatin1Char('2')))
+        return {QColor("#e8553d"), QColor("#ffffff"), QColor("#e8553d")};
+    return {QColor("#2b2b2b"), QColor("#ffffff"), QColor("#2b2b2b")};
+}
 
 QString nextCodeIn(const std::vector<CloudPerson> &people, const QString &className)
 {
@@ -46,7 +59,10 @@ ClassList::ClassList(const QString &className, QWidget *parent)
     setDragDropMode(QAbstractItemView::DragDrop);
     setDefaultDropAction(Qt::CopyAction);
     setSelectionMode(QAbstractItemView::SingleSelection);
-    setMinimumWidth(190);
+    setFrameShape(QFrame::NoFrame);
+    setSpacing(8);
+    setStyleSheet(QStringLiteral("QListWidget { background: transparent; border: none; }"
+                                 "QListWidget::item { background: transparent; border: none; }"));
 }
 
 bool ClassList::accepts(const QMimeData *data, const QObject *source) const
@@ -99,7 +115,8 @@ ClassBoardDialog::ClassBoardDialog(CloudStore &store, QWidget *parent)
     : QDialog(parent), m_store(store)
 {
     setWindowTitle(tr("Élèves par classe"));
-    resize(1100, 640);
+    resize(1200, 680);
+    setStyleSheet(QStringLiteral("QDialog { background: #f6f1e6; }"));
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(10);
@@ -112,15 +129,15 @@ ClassBoardDialog::ClassBoardDialog(CloudStore &store, QWidget *parent)
 
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
+    scroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; border: none; }"));
     auto *content = new QWidget(scroll);
-    m_columnsLayout = new QVBoxLayout(content);
-    auto *row = new QHBoxLayout;
-    row->setSpacing(12);
+    content->setStyleSheet(QStringLiteral("background: transparent;"));
+    auto *row = new QHBoxLayout(content);
+    row->setSpacing(14);
     for (const QString &className : SchoolClasses::all())
         row->addWidget(makeColumn(className));
     row->addWidget(makeColumn(QString::fromLatin1(kUnassigned)));
     row->addStretch(1);
-    m_columnsLayout->addLayout(row);
     scroll->setWidget(content);
     layout->addWidget(scroll, 1);
 
@@ -148,30 +165,22 @@ ClassBoardDialog::ClassBoardDialog(CloudStore &store, QWidget *parent)
 
 QWidget *ClassBoardDialog::makeColumn(const QString &className)
 {
-    auto *column = new QFrame(this);
-    column->setObjectName(QStringLiteral("card"));
-    auto *layout = new QVBoxLayout(column);
-    layout->setContentsMargins(10, 10, 10, 10);
-
     const QString title = className.isEmpty() ? tr("Sans classe") : className;
-    auto *header = new QLabel(title, column);
-    header->setObjectName(QStringLiteral("title"));
-    auto *count = new QLabel(column);
-    count->setObjectName(QStringLiteral("muted"));
-    m_counts.insert(className, count);
-    layout->addWidget(header);
-    layout->addWidget(count);
+    const CardTone tone = classTone(className);
+    ColumnParts parts = PipelineCards::makeColumn(title, tone.dot, this);
+    m_counts.insert(className, parts.count);
 
-    auto *list = new ClassList(className, column);
+    auto *list = new ClassList(className, parts.frame);
+    list->setMinimumHeight(360);
     m_lists.insert(className, list);
     connect(list, &ClassList::personDropped, this, &ClassBoardDialog::onPersonDropped);
-    layout->addWidget(list, 1);
+    parts.layout->addWidget(list, 1);
 
-    auto *add = new QPushButton(tr("+ Ajouter un élève"), column);
-    add->setProperty("variant", QStringLiteral("ghost"));
-    layout->addWidget(add);
+    auto *add = new QPushButton(tr("+ Ajouter un élève"), parts.frame);
+    add->setProperty("variant", QStringLiteral("teal"));
+    parts.layout->addWidget(add);
     connect(add, &QPushButton::clicked, this, [this, className]() { onAddStudent(className); });
-    return column;
+    return parts.frame;
 }
 
 void ClassBoardDialog::reload()
@@ -188,16 +197,20 @@ void ClassBoardDialog::reload()
     }
 
     for (auto it = m_lists.begin(); it != m_lists.end(); ++it) {
-        it.value()->clear();
+        ClassList *list = it.value();
+        list->clear();
+        const CardTone tone = classTone(it.key());
         int count = 0;
         for (const CloudPerson &person : m_students) {
             if (person.className != it.key())
                 continue;
-            auto *item = new QListWidgetItem(QStringLiteral("%1 · %2").arg(person.code, person.name), it.value());
+            auto *item = new QListWidgetItem(list);
             item->setData(Qt::UserRole, person.id);
+            item->setSizeHint(QSize(0, 66));
+            list->setItemWidget(item, PipelineCards::personCard(person, person.code, tone, list));
             ++count;
         }
-        m_counts.value(it.key())->setText(tr("%1 élève(s)").arg(count));
+        m_counts.value(it.key())->setText(QString::number(count));
     }
 }
 
