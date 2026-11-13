@@ -14,6 +14,7 @@
 #include "reports.h"
 
 class DashboardDialog;
+class HeaderBar;
 class QLabel;
 class QTimer;
 class QLineEdit;
@@ -82,6 +83,7 @@ private:
     QPointer<DashboardDialog> m_dashboard;
     QTimer *m_liveTimer = nullptr;
     QPushButton *m_avatarButton = nullptr;
+    HeaderBar *m_header = nullptr;
     QString m_userAvatar;
     QLabel *m_scheduleLabel = nullptr;
     QComboBox *m_monthBox = nullptr;
