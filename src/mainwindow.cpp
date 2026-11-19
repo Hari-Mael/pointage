@@ -24,6 +24,7 @@
 #include "dashboarddialog.h"
 #include "exporter.h"
 #include "fields.h"
+#include "glass.h"
 #include "headerbar.h"
 #include "persondialog.h"
 #include "photo.h"
@@ -55,9 +56,7 @@ QTableWidgetItem *makeItem(const QString &text, Qt::Alignment alignment = Qt::Al
 
 QFrame *makeCard(QWidget *parent)
 {
-    auto *card = new QFrame(parent);
-    card->setObjectName(QStringLiteral("card"));
-    return card;
+    return new GlassCard(parent);
 }
 
 QString nextCodeFor(const std::vector<CloudPerson> &people, int kind, QChar prefix)
@@ -107,8 +106,7 @@ void MainWindow::saveReport(const QString &defaultName, const QString &content)
 
 void MainWindow::buildUi()
 {
-    auto *central = new QWidget(this);
-    central->setObjectName(QStringLiteral("page"));
+    auto *central = new GlassBackdrop(this);
     auto *root = new QVBoxLayout(central);
     root->setContentsMargins(16, 16, 16, 16);
     root->setSpacing(12);
@@ -120,6 +118,11 @@ void MainWindow::buildUi()
     root->addWidget(buildFooter());
 
     setCentralWidget(central);
+
+    QList<QWidget *> sections;
+    for (QWidget *widget : central->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly))
+        sections << widget;
+    GlassAnim::staggerIn(sections);
 
     m_liveTimer = new QTimer(this);
     m_liveTimer->setInterval(30000);
@@ -367,22 +370,22 @@ void MainWindow::refresh()
             const QDate date(year, month, day);
             const QChar status = marks.value(day);
             if (isRestDay(date)) {
-                cell->setBackground(QColor("#dfe4ec"));
+                cell->setBackground(QColor("#1a2622"));
             } else if (status == QChar('P')) {
                 ++totalPresent;
                 cell->setText(QStringLiteral("P"));
-                cell->setForeground(QColor("#1b8a4b"));
-                cell->setBackground(QColor("#dff5e6"));
+                cell->setForeground(QColor("#6ee7b7"));
+                cell->setBackground(QColor("#103d2b"));
             } else if (status == QChar('A')) {
                 ++totalAbsent;
                 cell->setText(QStringLiteral("A"));
-                cell->setForeground(QColor("#d12f3a"));
-                cell->setBackground(QColor("#fde2e4"));
+                cell->setForeground(QColor("#fda4af"));
+                cell->setBackground(QColor("#4a1c2a"));
             } else if (status == QChar('R')) {
                 ++totalPresent;
                 cell->setText(QStringLiteral("R"));
-                cell->setForeground(QColor("#b7791f"));
-                cell->setBackground(QColor("#fff4d6"));
+                cell->setForeground(QColor("#fcd34d"));
+                cell->setBackground(QColor("#453614"));
             }
             m_table->setItem(row, kColFirstDay + day - 1, cell);
         }
@@ -390,460 +393,4 @@ void MainWindow::refresh()
         m_table->setCellWidget(row, actionsCol, makeActionWidget(person.id));
     }
 
-    m_statPresent->setText(tr("Présences : %1").arg(totalPresent));
-    m_statAbsent->setText(tr("Absences : %1").arg(totalAbsent));
-    m_statEmp->setText(tr("Employés : %1").arg(employees));
-    m_statStu->setText(tr("Élèves : %1").arg(students));
-    applySearch();
-    m_header->setPendingCount(m_store.pendingChanges());
-    m_header->setSubtitle(tr("Créneaux : %1").arg(Schedule::load().summary()));
-    if (m_dashboard && m_dashboard->isVisible())
-        m_dashboard->setSnapshot(buildSnapshot());
-}
-
-void MainWindow::applySearch()
-{
-    const QString needle = m_search->text().trimmed();
-    for (int row = 0; row < m_table->rowCount(); ++row) {
-        const QString code = m_table->item(row, kColId)->text();
-        const QString name = m_table->item(row, kColName)->text();
-        const bool match = needle.isEmpty()
-                           || code.contains(needle, Qt::CaseInsensitive)
-                           || name.contains(needle, Qt::CaseInsensitive);
-        m_table->setRowHidden(row, !match);
-    }
-}
-
-void MainWindow::onCellClicked(int row, int column)
-{
-    const int days = QDate(selectedYear(), selectedMonth(), 1).daysInMonth();
-    if (column < kColFirstDay || column >= kColFirstDay + days)
-        return;
-
-    const QDate date(selectedYear(), selectedMonth(), column - kColFirstDay + 1);
-    if (isRestDay(date))
-        return;
-
-    const QTableWidgetItem *idItem = m_table->item(row, kColId);
-    const QTableWidgetItem *cell = m_table->item(row, column);
-    if (!idItem || !cell)
-        return;
-
-    const QString personId = idItem->data(Qt::UserRole).toString();
-    const QString current = cell->text();
-
-    QChar next;
-    if (current.isEmpty())
-        next = QChar('P');
-    else if (current == QLatin1String("P"))
-        next = QChar('A');
-    else if (current == QLatin1String("A"))
-        next = QChar('R');
-
-    reportWriteResult(m_store.setMark(personId, date, next), tr("Enregistrement"));
-    refresh();
-}
-
-QWidget *MainWindow::makeActionWidget(const QString &personId)
-{
-    auto *box = new QWidget;
-    auto *layout = new QHBoxLayout(box);
-    layout->setContentsMargins(4, 3, 4, 3);
-    layout->setSpacing(6);
-
-    auto *editPersonButton = new QPushButton(tr("Modifier la fiche"), box);
-    editPersonButton->setProperty("variant", QStringLiteral("ghost"));
-    editPersonButton->setProperty("small", QStringLiteral("true"));
-    auto *insertButton = new QPushButton(tr("Insérer"), box);
-    insertButton->setProperty("variant", QStringLiteral("teal"));
-    insertButton->setProperty("small", QStringLiteral("true"));
-    auto *modifyButton = new QPushButton(tr("Modifier"), box);
-    modifyButton->setProperty("small", QStringLiteral("true"));
-    auto *deleteButton = new QPushButton(tr("Supprimer"), box);
-    deleteButton->setProperty("variant", QStringLiteral("red"));
-    deleteButton->setProperty("small", QStringLiteral("true"));
-    auto *reportButton = new QPushButton(tr("Actions ▾"), box);
-    reportButton->setProperty("small", QStringLiteral("true"));
-
-    auto *menu = new QMenu(reportButton);
-    menu->addAction(tr("Présence mensuelle (détail)"), [this, personId]() { exportMonthly(personId); });
-    menu->addAction(tr("Taux de présentéisme"),
-                    [this, personId]() { exportRate(personId, Reports::Rate::Presence); });
-    menu->addAction(tr("Taux d'absence"), [this, personId]() { exportRate(personId, Reports::Rate::Absence); });
-    menu->addAction(tr("Taux de retard"), [this, personId]() { exportRate(personId, Reports::Rate::Late); });
-    menu->addSeparator();
-    menu->addAction(tr("Rapport élève imprimable (PDF)"), [this, personId]() { openStudentReport(personId); });
-    reportButton->setMenu(menu);
-
-    layout->addWidget(editPersonButton);
-    layout->addWidget(insertButton);
-    layout->addWidget(modifyButton);
-    layout->addWidget(deleteButton);
-    layout->addWidget(reportButton);
-
-    connect(editPersonButton, &QPushButton::clicked, this, [this, personId]() { editPerson(personId); });
-    connect(insertButton, &QPushButton::clicked, this, [this, personId]() { insertPresence(personId); });
-    connect(modifyButton, &QPushButton::clicked, this, [this, personId]() { modifyPresence(personId); });
-    connect(deleteButton, &QPushButton::clicked, this, [this, personId]() { deletePerson(personId); });
-    return box;
-}
-
-const CloudPerson *MainWindow::findPerson(const QString &personId) const
-{
-    for (const CloudPerson &person : m_people) {
-        if (person.id == personId)
-            return &person;
-    }
-    return nullptr;
-}
-
-void MainWindow::setKind(int kind)
-{
-    m_kind = kind;
-    refresh();
-}
-
-void MainWindow::toggleRestDay(int dayOfWeek)
-{
-    const int mask = m_restMask ^ (1 << dayOfWeek);
-    reportWriteResult(m_store.setRestMask(mask), tr("Enregistrement des jours de repos"));
-    refresh();
-}
-
-void MainWindow::addPerson()
-{
-    const KindDef &def = kindDef(m_kind);
-    QStringList codes;
-    for (const CloudPerson &person : m_all) {
-        if (person.kind == m_kind)
-            codes << person.code;
-    }
-
-    PersonDialog dialog(m_kind, nextCodeFor(m_all, m_kind, def.prefix), codes, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    const PersonRecord created = dialog.person();
-    CloudPerson person;
-    person.kind = m_kind;
-    person.code = created.code;
-    person.name = created.name;
-    person.fields = created.fields;
-    person.photo = dialog.photo();
-    reportWriteResult(m_store.addPerson(person), tr("Ajout de la fiche"));
-    refresh();
-}
-
-void MainWindow::editPerson(const QString &personId)
-{
-    const CloudPerson *found = findPerson(personId);
-    if (!found)
-        return;
-    const CloudPerson original = *found;
-
-    QStringList codes;
-    for (const CloudPerson &person : m_all) {
-        if (person.kind == original.kind && person.className == original.className && person.id != original.id)
-            codes << person.code;
-    }
-
-    PersonDialog dialog(original.kind, original.code, codes, this);
-    dialog.setEditMode();
-    dialog.setValues(original.fields);
-    dialog.setPhoto(original.photo);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    const PersonRecord edited = dialog.person();
-    CloudPerson updated = original;
-    updated.code = edited.code;
-    updated.name = edited.name;
-    updated.fields = edited.fields;
-    updated.photo = dialog.photo();
-    reportWriteResult(m_store.updatePerson(updated), tr("Modification de la fiche"));
-    refresh();
-}
-
-void MainWindow::openClassBoard()
-{
-    ClassBoardDialog dialog(m_store, this);
-    connect(&dialog, &ClassBoardDialog::changed, this, &MainWindow::refresh);
-    dialog.exec();
-    refresh();
-}
-
-void MainWindow::openContractBoard()
-{
-    ContractBoardDialog dialog(m_store, this);
-    connect(&dialog, &ContractBoardDialog::changed, this, &MainWindow::refresh);
-    dialog.exec();
-    refresh();
-}
-
-void MainWindow::openStudentReport(const QString &personId)
-{
-    const CloudPerson *person = findPerson(personId);
-    if (!person)
-        return;
-    const QString schoolName = SchoolInfo::name();
-    StudentReportDialog dialog(*person, m_marks.value(personId), selectedYear(), selectedMonth(), m_restMask,
-                               QDate::currentDate(), schoolName, this);
-    dialog.exec();
-}
-
-void MainWindow::importRoster()
-{
-    const QString path = QFileDialog::getOpenFileName(this, tr("Importer une liste (Excel / CSV)"), QString(),
-                                                      tr("Fichiers CSV (*.csv);;Tous les fichiers (*)"));
-    if (path.isEmpty())
-        return;
-
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, windowTitle(), tr("Lecture du fichier impossible : %1").arg(file.errorString()));
-        return;
-    }
-    const QString content = Reports::decode(file.readAll());
-
-    QStringList existing;
-    for (const CloudPerson &person : m_all) {
-        if (person.kind == m_kind)
-            existing << person.code;
-    }
-    const Reports::RosterImport result = Reports::rosterFromCsv(content, m_kind, existing);
-
-    int added = 0;
-    int failed = 0;
-    for (const CloudPerson &person : result.people) {
-        if (m_store.addPerson(person))
-            ++added;
-        else
-            ++failed;
-    }
-    refresh();
-
-    const int errors = static_cast<int>(result.errors.size()) + failed;
-    QString summary = tr("%1 fiche(s) importée(s), %2 déjà existante(s) ignorée(s), %3 erreur(s).")
-                          .arg(added).arg(result.skippedExisting).arg(errors);
-    if (!result.errors.isEmpty())
-        summary += QStringLiteral("\n\n") + result.errors.mid(0, 10).join(QLatin1Char('\n'));
-    QMessageBox::information(this, windowTitle(), summary);
-}
-
-void MainWindow::exportRoster()
-{
-    std::vector<CloudPerson> people;
-    for (const CloudPerson &person : m_all) {
-        if (person.kind == m_kind)
-            people.push_back(person);
-    }
-    saveReport(QStringLiteral("%1.csv").arg(kindDef(m_kind).plural.toLower()), Reports::rosterCsv(people, m_kind));
-}
-
-void MainWindow::exportMonthly(const QString &personId)
-{
-    const CloudPerson *person = findPerson(personId);
-    if (!person)
-        return;
-    const QString name = QStringLiteral("presence_%1_%2_%3.csv")
-                             .arg(person->code, QString::number(selectedYear()))
-                             .arg(selectedMonth(), 2, 10, QLatin1Char('0'));
-    saveReport(name, Reports::monthlyDetailCsv(*person, m_marks.value(personId), selectedYear(), selectedMonth(),
-                                              m_restMask, QDate::currentDate()));
-}
-
-void MainWindow::exportRate(const QString &personId, Reports::Rate rate)
-{
-    const CloudPerson *person = findPerson(personId);
-    if (!person)
-        return;
-    const QString prefix = rate == Reports::Rate::Presence ? QStringLiteral("presenteisme")
-                           : rate == Reports::Rate::Absence ? QStringLiteral("absence")
-                                                            : QStringLiteral("retard");
-    const QString name = QStringLiteral("taux_%1_%2_%3_%4.csv")
-                             .arg(prefix, person->code, QString::number(selectedYear()))
-                             .arg(selectedMonth(), 2, 10, QLatin1Char('0'));
-    saveReport(name, Reports::rateCsv(*person, m_marks.value(personId), selectedYear(), selectedMonth(),
-                                      m_restMask, QDate::currentDate(), rate));
-}
-
-void MainWindow::insertPresence(const QString &personId)
-{
-    const CloudPerson *person = findPerson(personId);
-    if (!person)
-        return;
-
-    const int year = selectedYear();
-    const int month = selectedMonth();
-    const CloudMarks existing = m_marks.value(personId);
-
-    PresenceDialog dialog(PresenceDialog::Mode::Insert, person->name, year, month, existing, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    int added = 0;
-    int skipped = 0;
-    int failed = 0;
-    for (const QDate &date : dialog.dates()) {
-        if (isRestDay(date) || existing.contains(date.day())) {
-            ++skipped;
-            continue;
-        }
-        if (m_store.setMark(personId, date, dialog.status()))
-            ++added;
-        else
-            ++failed;
-    }
-    refresh();
-    if (failed > 0)
-        QMessageBox::warning(this, windowTitle(),
-                             tr("%1 case(s) non enregistrée(s) : %2").arg(failed).arg(m_store.lastError()));
-    QMessageBox::information(this, windowTitle(),
-                             tr("%1 case(s) ajoutée(s), %2 ignorée(s) (repos ou déjà pointées).").arg(added).arg(skipped));
-}
-
-void MainWindow::modifyPresence(const QString &personId)
-{
-    const CloudPerson *person = findPerson(personId);
-    if (!person)
-        return;
-
-    const CloudMarks marks = m_marks.value(personId);
-    if (marks.isEmpty()) {
-        QMessageBox::information(this, windowTitle(),
-                                 tr("Aucune case pointée ce mois-ci pour %1.").arg(person->name));
-        return;
-    }
-
-    PresenceDialog dialog(PresenceDialog::Mode::Modify, person->name, selectedYear(), selectedMonth(), marks, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    const QDate date = dialog.dates().first();
-    reportWriteResult(m_store.setMark(personId, date, dialog.status()), tr("Modification"));
-    refresh();
-}
-
-void MainWindow::deletePerson(const QString &personId)
-{
-    const CloudPerson *person = findPerson(personId);
-    if (!person)
-        return;
-
-    const QString name = person->name;
-    const QString kindLabel = kindDef(m_kind).singular;
-
-    QMessageBox box(this);
-    box.setWindowTitle(windowTitle());
-    box.setIcon(QMessageBox::Question);
-    box.setText(tr("Que voulez-vous faire pour %1 (%2) ?").arg(name, kindLabel));
-    box.setInformativeText(tr("Effacer l'historique garde la fiche et supprime toutes ses cases pointées.\n"
-                              "Supprimer la personne retire la fiche et tout son historique."));
-    QPushButton *clearButton = box.addButton(tr("Effacer l'historique"), QMessageBox::ActionRole);
-    QPushButton *removeButton = box.addButton(tr("Supprimer la personne"), QMessageBox::DestructiveRole);
-    box.addButton(QMessageBox::Cancel);
-    box.exec();
-
-    const QAbstractButton *clicked = box.clickedButton();
-    if (clicked != clearButton && clicked != removeButton)
-        return;
-
-    const bool clearOnly = clicked == clearButton;
-    const auto answer = QMessageBox::question(
-        this, windowTitle(),
-        clearOnly ? tr("Effacer tout l'historique de %1 ? Cette action est définitive.").arg(name)
-                  : tr("Supprimer %1 et tout son historique ? Cette action est définitive.").arg(name));
-    if (answer != QMessageBox::Yes)
-        return;
-
-    if (clearOnly)
-        reportWriteResult(m_store.clearMarks(personId), tr("Effacement de l'historique"));
-    else
-        reportWriteResult(m_store.deletePerson(personId), tr("Suppression"));
-    refresh();
-}
-
-void MainWindow::openSettings()
-{
-    SettingsDialog dialog(this);
-    dialog.exec();
-    updateScheduleLabel();
-}
-
-Dashboard::Snapshot MainWindow::buildSnapshot() const
-{
-    const QLocale french(QLocale::French);
-    const QString title = tr("%1 — %2 %3")
-                              .arg(kindDef(m_kind).plural, french.monthName(selectedMonth()),
-                                   QString::number(selectedYear()));
-    return Dashboard::compute(m_all, m_kind, m_marks, selectedYear(), selectedMonth(), m_restMask,
-                              QDate::currentDate(), title);
-}
-
-void MainWindow::openDashboard()
-{
-    if (!m_dashboard)
-        m_dashboard = new DashboardDialog(this);
-    m_dashboard->setSnapshot(buildSnapshot());
-    m_dashboard->show();
-    m_dashboard->raise();
-    m_dashboard->activateWindow();
-}
-
-void MainWindow::liveUpdate()
-{
-    if (!m_dashboard || !m_dashboard->isVisible())
-        return;
-
-    std::vector<CloudPerson> all;
-    QHash<QString, CloudMarks> marks;
-    int restMask = m_restMask;
-    if (!m_store.fetchPeople(all) || !m_store.fetchMarks(selectedYear(), selectedMonth(), marks)
-        || !m_store.fetchRestMask(restMask)) {
-        return;
-    }
-    m_all = all;
-    m_marks = marks;
-    m_restMask = restMask;
-    m_dashboard->setSnapshot(buildSnapshot());
-}
-
-QWidget *MainWindow::buildFooter()
-{
-    auto *logout = new QPushButton(tr("Déconnexion"), this);
-    logout->setProperty("variant", QStringLiteral("ghost"));
-    connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
-
-    auto *row = new QHBoxLayout;
-    row->addWidget(logout);
-    row->addStretch(1);
-
-    auto *footer = new QWidget(this);
-    footer->setLayout(row);
-    return footer;
-}
-
-void MainWindow::refreshAvatar()
-{
-    m_avatarButton->setIcon(QIcon(Photo::avatar(m_userAvatar, m_userName, 44)));
-}
-
-void MainWindow::changeUserAvatar()
-{
-    const QString path = QFileDialog::getOpenFileName(this, tr("Photo de profil"), QString(),
-                                                      tr("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
-    if (path.isEmpty())
-        return;
-    QString error;
-    const QString encoded = Photo::encodeFile(path, error);
-    if (encoded.isEmpty()) {
-        QMessageBox::warning(this, windowTitle(), tr("Photo non utilisable : %1").arg(error));
-        return;
-    }
-    if (!m_store.setAvatar(encoded)) {
-        reportWriteResult(false, tr("Enregistrement de la photo"));
-        return;
-    }
-    m_userAvatar = encoded;
-    refreshAvatar();
-}
+    GlassAnim::countUp(m_statPresent,
