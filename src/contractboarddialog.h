@@ -1,8 +1,8 @@
 #pragma once
 
-#include <QDialog>
 #include <QListWidget>
 #include <QMap>
+#include <QWidget>
 #include <vector>
 
 #include "cloudstore.h"
@@ -32,7 +32,7 @@ private:
     QString m_column;
 };
 
-class ContractBoardDialog : public QDialog {
+class ContractBoardDialog : public QWidget {
     Q_OBJECT
 public:
     explicit ContractBoardDialog(CloudStore &store, QWidget *parent = nullptr);
