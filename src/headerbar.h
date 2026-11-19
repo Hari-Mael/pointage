@@ -18,7 +18,6 @@ public:
     QPushButton *avatarButton() const { return m_avatar; }
     void setAvatar(const QPixmap &avatar);
     void setPendingCount(int count);
-    void setSubtitle(const QString &text);
 
 signals:
     void homeRequested();
@@ -30,7 +29,6 @@ private:
     QPushButton *m_bell = nullptr;
     QPushButton *m_avatar = nullptr;
     QLabel *m_school = nullptr;
-    QLabel *m_subtitle = nullptr;
     QComboBox *m_month = nullptr;
     QSpinBox *m_year = nullptr;
 };
