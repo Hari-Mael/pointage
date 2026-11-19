@@ -21,9 +21,7 @@ public:
 
 signals:
     void homeRequested();
-    void dashboardRequested();
     void settingsRequested();
-    void logoutRequested();
 
 private:
     QPushButton *m_bell = nullptr;
