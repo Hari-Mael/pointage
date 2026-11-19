@@ -53,6 +53,7 @@ private slots:
     void openDashboard();
     void liveUpdate();
     void changeUserAvatar();
+    void toggleSidebar();
 
 private:
     void buildUi();
@@ -63,7 +64,6 @@ private:
     QWidget *buildPlansPage();
     QWidget *buildSettingsPage();
     QWidget *buildRestBar();
-    QWidget *buildSearchBar();
     QWidget *buildTableCard();
     QWidget *buildStats();
     QWidget *makeActionWidget(const QString &personId);
