@@ -179,6 +179,7 @@ QWidget *MainWindow::buildHeader()
     m_monthBox = m_header->monthBox();
     m_yearBox = m_header->yearBox();
     m_avatarButton = m_header->avatarButton();
+    m_search = m_header->searchEdit();
 
     const QDate today = QDate::currentDate();
     m_monthBox->setCurrentIndex(today.month() - 1);
@@ -189,6 +190,8 @@ QWidget *MainWindow::buildHeader()
     connect(m_avatarButton, &QPushButton::clicked, this, &MainWindow::changeUserAvatar);
     connect(m_header, &HeaderBar::settingsRequested, this, &MainWindow::openSettings);
     connect(m_header, &HeaderBar::homeRequested, this, [this]() { refresh(); });
+    connect(m_header, &HeaderBar::menuToggleRequested, this, &MainWindow::toggleSidebar);
+    connect(m_search, &QLineEdit::textChanged, this, &MainWindow::applySearch);
     return m_header;
 }
 
@@ -198,7 +201,6 @@ QWidget *MainWindow::buildDashboardPage()
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
-    layout->addWidget(buildSearchBar());
     layout->addWidget(buildTableCard(), 1);
     return page;
 }
@@ -348,21 +350,6 @@ QWidget *MainWindow::buildRestBar()
     }
     layout->addStretch(1);
     return bar;
-}
-
-QWidget *MainWindow::buildSearchBar()
-{
-    QFrame *card = makeCard(this);
-    auto *layout = new QHBoxLayout(card);
-    layout->setContentsMargins(14, 10, 14, 10);
-    m_search = new QLineEdit(card);
-    m_search->setPlaceholderText(tr("🔍 Rechercher par ID ou Nom..."));
-    auto *clear = new QPushButton(tr("Effacer"), card);
-    layout->addWidget(m_search, 1);
-    layout->addWidget(clear);
-    connect(m_search, &QLineEdit::textChanged, this, &MainWindow::applySearch);
-    connect(clear, &QPushButton::clicked, m_search, &QLineEdit::clear);
-    return card;
 }
 
 QWidget *MainWindow::buildTableCard()
@@ -912,6 +899,11 @@ void MainWindow::openSettings()
 {
     SettingsDialog dialog(this);
     dialog.exec();
+}
+
+void MainWindow::toggleSidebar()
+{
+    m_sidebar->setVisible(!m_sidebar->isVisible());
 }
 
 Dashboard::Snapshot MainWindow::buildSnapshot() const
