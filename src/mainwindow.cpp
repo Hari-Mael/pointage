@@ -239,16 +239,6 @@ QWidget *MainWindow::buildTableCard()
 
     layout->addWidget(buildStats());
 
-    auto *hint = new QLabel(tr("Cliquez sur une case : vide → P → A → R (retard) → vide"), card);
-    hint->setObjectName(QStringLiteral("muted"));
-    hint->setAlignment(Qt::AlignCenter);
-    layout->addWidget(hint);
-
-    m_scheduleLabel = new QLabel(card);
-    m_scheduleLabel->setObjectName(QStringLiteral("muted"));
-    m_scheduleLabel->setAlignment(Qt::AlignCenter);
-    layout->addWidget(m_scheduleLabel);
-    updateScheduleLabel();
     return card;
 }
 
@@ -282,11 +272,6 @@ QWidget *MainWindow::buildStats()
     layout->addWidget(m_statEmp, 1);
     layout->addWidget(m_statStu, 1);
     return row;
-}
-
-void MainWindow::updateScheduleLabel()
-{
-    m_scheduleLabel->setText(tr("Créneaux : %1").arg(Schedule::load().summary()));
 }
 
 void MainWindow::refresh()
@@ -399,7 +384,6 @@ void MainWindow::refresh()
     GlassAnim::countUp(m_statStu, static_cast<int>(students), [this](int v) { return tr("Élèves : %1").arg(v); });
     applySearch();
     m_header->setPendingCount(m_store.pendingChanges());
-    m_header->setSubtitle(tr("Créneaux : %1").arg(Schedule::load().summary()));
     if (m_dashboard && m_dashboard->isVisible())
         m_dashboard->setSnapshot(buildSnapshot());
 }
@@ -770,7 +754,6 @@ void MainWindow::openSettings()
 {
     SettingsDialog dialog(this);
     dialog.exec();
-    updateScheduleLabel();
 }
 
 Dashboard::Snapshot MainWindow::buildSnapshot() const
