@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include <QColor>
+#include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
@@ -13,13 +14,14 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QComboBox>
 
+#include "accountpanel.h"
 #include "classboarddialog.h"
 #include "contractboarddialog.h"
 #include "dashboarddialog.h"
@@ -74,20 +76,6 @@ QLabel *makeMuted(const QString &text, QWidget *parent)
     label->setObjectName(QStringLiteral("muted"));
     label->setWordWrap(true);
     return label;
-}
-
-QFrame *makeInfoCard(const QString &title, const QString &description, QPushButton *button, QWidget *parent)
-{
-    QFrame *card = makeCard(parent);
-    auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(20, 20, 20, 20);
-    layout->setSpacing(8);
-    layout->addWidget(makeTitle(title, card));
-    layout->addWidget(makeMuted(description, card));
-    layout->addStretch(1);
-    button->setParent(card);
-    layout->addWidget(button);
-    return card;
 }
 
 QString nextCodeFor(const std::vector<CloudPerson> &people, int kind, QChar prefix)
@@ -309,23 +297,36 @@ QWidget *MainWindow::buildSettingsPage()
     layout->setSpacing(12);
     layout->addWidget(makeTitle(tr("Paramètres"), page));
 
-    auto *schoolButton = new QPushButton(tr("Ouvrir les paramètres"), page);
-    connect(schoolButton, &QPushButton::clicked, this, &MainWindow::openSettings);
+    auto *scroll = new QScrollArea(page);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; }"));
 
-    auto *accountButton = new QPushButton(tr("Bientôt disponible"), page);
-    accountButton->setEnabled(false);
-
-    auto *row = new QHBoxLayout;
+    auto *content = new QWidget(scroll);
+    content->setObjectName(QStringLiteral("settingsContent"));
+    content->setStyleSheet(QStringLiteral("QWidget#settingsContent { background: transparent; }"));
+    auto *row = new QHBoxLayout(content);
+    row->setContentsMargins(0, 0, 0, 0);
     row->setSpacing(12);
-    row->addWidget(makeInfoCard(tr("Établissement, logo et créneaux"),
-                                tr("Nom de l'école, logo, plages horaires et confidentialité."),
-                                schoolButton, page), 1);
-    row->addWidget(makeInfoCard(tr("Identifiant et mot de passe"),
-                                tr("La modification du compte nécessite une route côté serveur, "
-                                   "qui n'est pas encore branchée."),
-                                accountButton, page), 1);
-    layout->addLayout(row);
-    layout->addStretch(1);
+
+    QFrame *settingsCard = makeCard(content);
+    auto *settingsLayout = new QVBoxLayout(settingsCard);
+    settingsLayout->setContentsMargins(20, 20, 20, 20);
+    settingsLayout->setSpacing(10);
+    settingsLayout->addWidget(makeTitle(tr("Établissement, logo et créneaux"), settingsCard));
+    settingsLayout->addWidget(new SettingsDialog(settingsCard));
+    row->addWidget(settingsCard, 1);
+
+    QFrame *accountCard = makeCard(content);
+    auto *accountLayout = new QVBoxLayout(accountCard);
+    accountLayout->setContentsMargins(20, 20, 20, 20);
+    accountLayout->setSpacing(10);
+    accountLayout->addWidget(makeTitle(tr("Identifiant et mot de passe"), accountCard));
+    accountLayout->addWidget(new AccountPanel(m_store, m_userEmail, accountCard));
+    row->addWidget(accountCard, 1);
+
+    scroll->setWidget(content);
+    layout->addWidget(scroll, 1);
     return page;
 }
 
@@ -881,8 +882,8 @@ void MainWindow::deletePerson(const QString &personId)
 
 void MainWindow::openSettings()
 {
-    SettingsDialog dialog(this);
-    dialog.exec();
+    m_sidebar->setCurrentSection(Sidebar::Settings);
+    m_pages->setCurrentIndex(4);
 }
 
 void MainWindow::toggleSidebar()
