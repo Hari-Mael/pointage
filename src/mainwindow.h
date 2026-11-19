@@ -65,7 +65,6 @@ private:
     void saveReport(const QString &defaultName, const QString &content);
     QWidget *buildFooter();
     void refreshAvatar();
-    void updateScheduleLabel();
     Dashboard::Snapshot buildSnapshot() const;
 
     int selectedYear() const { return m_yearBox->value(); }
@@ -85,7 +84,6 @@ private:
     QPushButton *m_avatarButton = nullptr;
     HeaderBar *m_header = nullptr;
     QString m_userAvatar;
-    QLabel *m_scheduleLabel = nullptr;
     QComboBox *m_monthBox = nullptr;
     QSpinBox *m_yearBox = nullptr;
     QLineEdit *m_search = nullptr;
