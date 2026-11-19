@@ -696,22 +696,6 @@ void MainWindow::editPerson(const QString &personId)
     refresh();
 }
 
-void MainWindow::openClassBoard()
-{
-    ClassBoardDialog dialog(m_store, this);
-    connect(&dialog, &ClassBoardDialog::changed, this, &MainWindow::refresh);
-    dialog.exec();
-    refresh();
-}
-
-void MainWindow::openContractBoard()
-{
-    ContractBoardDialog dialog(m_store, this);
-    connect(&dialog, &ContractBoardDialog::changed, this, &MainWindow::refresh);
-    dialog.exec();
-    refresh();
-}
-
 void MainWindow::openStudentReport(const QString &personId)
 {
     const CloudPerson *person = findPerson(personId);
