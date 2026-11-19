@@ -1,12 +1,12 @@
 #pragma once
 
-#include <QDialog>
+#include <QWidget>
 
 #include "schedule.h"
 
 class QTimeEdit;
 
-class SettingsDialog : public QDialog {
+class SettingsDialog : public QWidget {
     Q_OBJECT
 public:
     explicit SettingsDialog(QWidget *parent = nullptr);
