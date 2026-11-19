@@ -16,10 +16,12 @@
 class DashboardDialog;
 class HeaderBar;
 class QLabel;
-class QTimer;
 class QLineEdit;
 class QPushButton;
+class QStackedWidget;
 class QTableWidget;
+class QTimer;
+class Sidebar;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -55,6 +57,11 @@ private slots:
 private:
     void buildUi();
     QWidget *buildHeader();
+    QWidget *buildDashboardPage();
+    QWidget *buildActionsPage();
+    QWidget *buildAnalysisPage();
+    QWidget *buildPlansPage();
+    QWidget *buildSettingsPage();
     QWidget *buildRestBar();
     QWidget *buildSearchBar();
     QWidget *buildTableCard();
@@ -63,7 +70,6 @@ private:
     const CloudPerson *findPerson(const QString &personId) const;
     void reportWriteResult(bool ok, const QString &action);
     void saveReport(const QString &defaultName, const QString &content);
-    QWidget *buildFooter();
     void refreshAvatar();
     Dashboard::Snapshot buildSnapshot() const;
 
@@ -83,6 +89,9 @@ private:
     QTimer *m_liveTimer = nullptr;
     QPushButton *m_avatarButton = nullptr;
     HeaderBar *m_header = nullptr;
+    Sidebar *m_sidebar = nullptr;
+    QStackedWidget *m_pages = nullptr;
+    QLabel *m_pendingLabel = nullptr;
     QString m_userAvatar;
     QComboBox *m_monthBox = nullptr;
     QSpinBox *m_yearBox = nullptr;
