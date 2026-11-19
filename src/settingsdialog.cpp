@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTime>
 #include <QTimeEdit>
 #include <QVBoxLayout>
 
@@ -36,13 +37,12 @@ QHBoxLayout *makeRange(QTimeEdit *from, QTimeEdit *to, QWidget *parent)
 }
 
 SettingsDialog::SettingsDialog(QWidget *parent)
-    : QDialog(parent)
+    : QWidget(parent)
 {
-    setWindowTitle(tr("Paramètres"));
-    resize(480, 560);
     const Schedule schedule = Schedule::load();
 
     auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     auto *logoBox = new QGroupBox(tr("Logo"), this);
     auto *logoLayout = new QHBoxLayout(logoBox);
@@ -79,23 +79,21 @@ SettingsDialog::SettingsDialog(QWidget *parent)
                             this);
     note->setWordWrap(true);
     layout->addWidget(note);
-    layout->addStretch(1);
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save, this);
     layout->addWidget(buttons);
 
     connect(changeLogoButton, &QPushButton::clicked, this, &SettingsDialog::changeLogo);
     connect(resetLogoButton, &QPushButton::clicked, this, &SettingsDialog::resetLogo);
     connect(privacyButton, &QPushButton::clicked, this, &SettingsDialog::openPrivacy);
     connect(buttons, &QDialogButtonBox::accepted, this, &SettingsDialog::save);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
 void SettingsDialog::updateIcons()
 {
     qApp->setWindowIcon(Logo::icon());
-    if (parentWidget())
-        parentWidget()->setWindowIcon(Logo::icon());
+    if (QWidget *top = window())
+        top->setWindowIcon(Logo::icon());
 }
 
 void SettingsDialog::changeLogo()
@@ -106,7 +104,7 @@ void SettingsDialog::changeLogo()
         return;
     QString error;
     if (!Logo::setCustom(path, error)) {
-        QMessageBox::warning(this, windowTitle(), tr("Logo non enregistré : %1").arg(error));
+        QMessageBox::warning(this, tr("Paramètres"), tr("Logo non enregistré : %1").arg(error));
         return;
     }
     updateIcons();
@@ -134,12 +132,12 @@ void SettingsDialog::save()
     schedule.afternoonEnd = m_afternoonEnd->time();
 
     if (!schedule.isValid()) {
-        QMessageBox::warning(this, windowTitle(),
+        QMessageBox::warning(this, tr("Paramètres"),
                              tr("Créneaux invalides : chaque période doit finir après son début, "
                                 "et les périodes doivent se suivre (matin, pause, après-midi)."));
         return;
     }
     schedule.save();
     emit scheduleSaved(schedule);
-    accept();
+    QMessageBox::information(this, tr("Paramètres"), tr("Paramètres enregistrés."));
 }
