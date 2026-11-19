@@ -13,11 +13,6 @@ namespace {
 
 const char *const kHeaderStyle = R"(
 QFrame#topBar { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 18px; }
-QLabel#appName { color: #f4fbf8; font-size: 12pt; font-weight: 800; }
-QPushButton#pill { background: rgba(255,255,255,0.08); color: #eaf6f1; border: 1px solid rgba(255,255,255,0.14); border-radius: 16px; padding: 8px 16px; font-weight: 600; }
-QPushButton#pill:hover { background: rgba(255,255,255,0.16); }
-QPushButton#pillAccent { background: #34d399; color: #04140e; border: none; border-radius: 16px; padding: 8px 16px; font-weight: 700; }
-QPushButton#pillAccent:hover { background: #5ee0ad; }
 QFrame#profile { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px; }
 QLabel#profileName { color: #f4fbf8; font-weight: 700; }
 QLabel#profileMail { color: #9fbfb4; font-size: 9pt; }
@@ -25,7 +20,6 @@ QFrame#banner { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(
 QLabel#bannerKicker { color: #d1fae5; font-size: 9pt; font-weight: 700; }
 QLabel#bannerTitle { color: #ffffff; font-size: 20pt; font-weight: 800; }
 QComboBox#bannerCombo, QSpinBox#bannerSpin { background: rgba(255,255,255,0.12); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); border-radius: 12px; padding: 6px 10px; }
-QPushButton#bannerButton { background: rgba(255,255,255,0.16); color: #ffffff; border: 1px solid rgba(255,255,255,0.35); border-radius: 16px; padding: 8px 16px; font-weight: 600; }
 )";
 
 }
@@ -44,19 +38,10 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     auto *top = new QHBoxLayout(topBar);
     top->setContentsMargins(16, 10, 16, 10);
     top->setSpacing(10);
-
-    auto *dashboard = new QPushButton(tr("Tableau de bord"), topBar);
-    dashboard->setObjectName(QStringLiteral("pillAccent"));
-    top->addWidget(dashboard);
     top->addStretch(1);
 
-    auto *home = new QPushButton(tr("Accueil"), topBar);
-    home->setObjectName(QStringLiteral("pill"));
-    top->addWidget(home);
-
     m_bell = new QPushButton(QStringLiteral("🔔"), topBar);
-    m_bell->setObjectName(QStringLiteral("pill"));
-    m_bell->setToolTip(tr("Modifications en attente d'envoi"));
+    m_bell->setToolTip(tr("Modifications en attente d'envoi (cliquer pour rafraîchir)"));
     top->addWidget(m_bell);
 
     auto *profile = new QFrame(topBar);
@@ -113,14 +98,11 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     bannerLayout->addWidget(m_year);
 
     auto *schoolSettings = new QPushButton(tr("Voir les paramètres"), banner);
-    schoolSettings->setObjectName(QStringLiteral("bannerButton"));
     bannerLayout->addWidget(schoolSettings);
     root->addWidget(banner);
 
-    connect(home, &QPushButton::clicked, this, &HeaderBar::homeRequested);
-    connect(dashboard, &QPushButton::clicked, this, &HeaderBar::dashboardRequested);
-    connect(schoolSettings, &QPushButton::clicked, this, &HeaderBar::settingsRequested);
     connect(m_bell, &QPushButton::clicked, this, &HeaderBar::homeRequested);
+    connect(schoolSettings, &QPushButton::clicked, this, &HeaderBar::settingsRequested);
 }
 
 void HeaderBar::setAvatar(const QPixmap &avatar)
