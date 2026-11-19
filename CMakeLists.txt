@@ -88,6 +88,8 @@ add_executable(pointage
     src/pipelinecards.cpp
     src/glass.h
     src/glass.cpp
+    src/sidebar.h
+    src/sidebar.cpp
     resources/resources.qrc
 )
 
