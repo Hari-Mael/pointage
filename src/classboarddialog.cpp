@@ -116,7 +116,7 @@ ClassBoardDialog::ClassBoardDialog(CloudStore &store, QWidget *parent)
     : QWidget(parent), m_store(store)
 {
     setObjectName(QStringLiteral("classBoard"));
-    setStyleSheet(QStringLiteral("QWidget#classBoard { background: #f6f1e6; }"));
+    setStyleSheet(QStringLiteral("QWidget#classBoard { background: transparent; }"));
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(10);
