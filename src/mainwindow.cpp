@@ -1,13 +1,12 @@
 #include "mainwindow.h"
 
 #include <QColor>
-#include <QIcon>
-#include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLocale>
@@ -15,9 +14,11 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QStackedWidget>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QComboBox>
 
 #include "classboarddialog.h"
 #include "contractboarddialog.h"
@@ -32,6 +33,7 @@
 #include "schedule.h"
 #include "schoolinfo.h"
 #include "settingsdialog.h"
+#include "sidebar.h"
 #include "studentreport.h"
 
 namespace {
@@ -57,6 +59,35 @@ QTableWidgetItem *makeItem(const QString &text, Qt::Alignment alignment = Qt::Al
 QFrame *makeCard(QWidget *parent)
 {
     return new GlassCard(parent);
+}
+
+QLabel *makeTitle(const QString &text, QWidget *parent)
+{
+    auto *label = new QLabel(text, parent);
+    label->setObjectName(QStringLiteral("title"));
+    return label;
+}
+
+QLabel *makeMuted(const QString &text, QWidget *parent)
+{
+    auto *label = new QLabel(text, parent);
+    label->setObjectName(QStringLiteral("muted"));
+    label->setWordWrap(true);
+    return label;
+}
+
+QFrame *makeInfoCard(const QString &title, const QString &description, QPushButton *button, QWidget *parent)
+{
+    QFrame *card = makeCard(parent);
+    auto *layout = new QVBoxLayout(card);
+    layout->setContentsMargins(20, 20, 20, 20);
+    layout->setSpacing(8);
+    layout->addWidget(makeTitle(title, card));
+    layout->addWidget(makeMuted(description, card));
+    layout->addStretch(1);
+    button->setParent(card);
+    layout->addWidget(button);
+    return card;
 }
 
 QString nextCodeFor(const std::vector<CloudPerson> &people, int kind, QChar prefix)
@@ -106,22 +137,34 @@ void MainWindow::saveReport(const QString &defaultName, const QString &content)
 
 void MainWindow::buildUi()
 {
-    auto *central = new GlassBackdrop(this);
-    auto *root = new QVBoxLayout(central);
-    root->setContentsMargins(16, 16, 16, 16);
-    root->setSpacing(12);
+    auto *shell = new GlassBackdrop(this);
+    auto *shellLayout = new QHBoxLayout(shell);
+    shellLayout->setContentsMargins(12, 12, 12, 12);
+    shellLayout->setSpacing(12);
 
-    root->addWidget(buildHeader());
-    root->addWidget(buildRestBar());
-    root->addWidget(buildSearchBar());
-    root->addWidget(buildTableCard(), 1);
-    root->addWidget(buildFooter());
+    m_sidebar = new Sidebar(shell);
+    shellLayout->addWidget(m_sidebar);
 
-    setCentralWidget(central);
+    auto *main = new QWidget(shell);
+    auto *mainLayout = new QVBoxLayout(main);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(12);
+    mainLayout->addWidget(buildHeader());
 
-    QList<QWidget *> sections;
-    for (QWidget *widget : central->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly))
-        sections << widget;
+    m_pages = new QStackedWidget(main);
+    m_pages->addWidget(buildDashboardPage());
+    m_pages->addWidget(buildActionsPage());
+    m_pages->addWidget(buildAnalysisPage());
+    m_pages->addWidget(buildPlansPage());
+    m_pages->addWidget(buildSettingsPage());
+    mainLayout->addWidget(m_pages, 1);
+    shellLayout->addWidget(main, 1);
+    setCentralWidget(shell);
+
+    connect(m_sidebar, &Sidebar::sectionChanged, m_pages, &QStackedWidget::setCurrentIndex);
+    connect(m_sidebar, &Sidebar::logoutRequested, this, &MainWindow::logoutRequested);
+
+    const QList<QWidget *> sections{m_sidebar, m_header, m_pages};
     GlassAnim::staggerIn(sections);
 
     m_liveTimer = new QTimer(this);
@@ -144,10 +187,131 @@ QWidget *MainWindow::buildHeader()
     connect(m_monthBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh(); });
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
     connect(m_avatarButton, &QPushButton::clicked, this, &MainWindow::changeUserAvatar);
-    connect(m_header, &HeaderBar::dashboardRequested, this, &MainWindow::openDashboard);
     connect(m_header, &HeaderBar::settingsRequested, this, &MainWindow::openSettings);
     connect(m_header, &HeaderBar::homeRequested, this, [this]() { refresh(); });
     return m_header;
+}
+
+QWidget *MainWindow::buildDashboardPage()
+{
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    layout->addWidget(buildSearchBar());
+    layout->addWidget(buildTableCard(), 1);
+    return page;
+}
+
+QWidget *MainWindow::buildActionsPage()
+{
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    layout->addWidget(makeTitle(tr("Actions"), page));
+
+    auto *addEmployee = new QPushButton(tr("Ajouter employé"), page);
+    connect(addEmployee, &QPushButton::clicked, this, &MainWindow::openContractBoard);
+    auto *addStudent = new QPushButton(tr("Ajouter élève"), page);
+    connect(addStudent, &QPushButton::clicked, this, &MainWindow::openClassBoard);
+
+    auto *row = new QHBoxLayout;
+    row->setSpacing(12);
+    row->addWidget(makeInfoCard(tr("Ajouter un employé"),
+                                tr("Créer une fiche employé et définir son contrat."), addEmployee, page), 1);
+    row->addWidget(makeInfoCard(tr("Ajouter un élève"),
+                                tr("Créer une fiche élève dans une classe, ou déplacer un élève entre classes."),
+                                addStudent, page), 1);
+    layout->addLayout(row);
+    layout->addStretch(1);
+    return page;
+}
+
+QWidget *MainWindow::buildAnalysisPage()
+{
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    layout->addWidget(makeTitle(tr("Analyse"), page));
+    layout->addWidget(buildStats());
+
+    QFrame *tools = makeCard(page);
+    auto *toolsLayout = new QHBoxLayout(tools);
+    toolsLayout->setContentsMargins(20, 16, 20, 16);
+    toolsLayout->setSpacing(10);
+    toolsLayout->addWidget(makeMuted(tr("Import / export des listes et tableau de bord détaillé."), tools), 1);
+
+    auto *importButton = new QPushButton(tr("Importer Excel"), tools);
+    connect(importButton, &QPushButton::clicked, this, &MainWindow::importRoster);
+    auto *exportButton = new QPushButton(tr("Exporter Excel"), tools);
+    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportRoster);
+    auto *dashboardButton = new QPushButton(tr("Tableau de bord détaillé"), tools);
+    connect(dashboardButton, &QPushButton::clicked, this, &MainWindow::openDashboard);
+
+    toolsLayout->addWidget(importButton);
+    toolsLayout->addWidget(exportButton);
+    toolsLayout->addWidget(dashboardButton);
+    layout->addWidget(tools);
+    layout->addStretch(1);
+    return page;
+}
+
+QWidget *MainWindow::buildPlansPage()
+{
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    layout->addWidget(makeTitle(tr("Plans"), page));
+
+    QFrame *restCard = makeCard(page);
+    auto *restLayout = new QVBoxLayout(restCard);
+    restLayout->setContentsMargins(20, 16, 20, 16);
+    restLayout->addWidget(makeTitle(tr("Planning hebdomadaire"), restCard));
+    restLayout->addWidget(makeMuted(tr("Les jours de repos ne peuvent pas recevoir de pointage."), restCard));
+    restLayout->addWidget(buildRestBar());
+    layout->addWidget(restCard);
+
+    QFrame *syncCard = makeCard(page);
+    auto *syncLayout = new QVBoxLayout(syncCard);
+    syncLayout->setContentsMargins(20, 16, 20, 16);
+    syncLayout->addWidget(makeTitle(tr("Synchronisation"), syncCard));
+    m_pendingLabel = makeMuted(QString(), syncCard);
+    syncLayout->addWidget(m_pendingLabel);
+    layout->addWidget(syncCard);
+
+    layout->addStretch(1);
+    return page;
+}
+
+QWidget *MainWindow::buildSettingsPage()
+{
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    layout->addWidget(makeTitle(tr("Paramètres"), page));
+
+    auto *schoolButton = new QPushButton(tr("Ouvrir les paramètres"), page);
+    connect(schoolButton, &QPushButton::clicked, this, &MainWindow::openSettings);
+
+    auto *accountButton = new QPushButton(tr("Bientôt disponible"), page);
+    accountButton->setEnabled(false);
+
+    auto *row = new QHBoxLayout;
+    row->setSpacing(12);
+    row->addWidget(makeInfoCard(tr("Établissement, logo et créneaux"),
+                                tr("Nom de l'école, logo, plages horaires et confidentialité."),
+                                schoolButton, page), 1);
+    row->addWidget(makeInfoCard(tr("Identifiant et mot de passe"),
+                                tr("La modification du compte nécessite une route côté serveur, "
+                                   "qui n'est pas encore branchée."),
+                                accountButton, page), 1);
+    layout->addLayout(row);
+    layout->addStretch(1);
+    return page;
 }
 
 QWidget *MainWindow::buildRestBar()
@@ -170,15 +334,6 @@ QWidget *MainWindow::buildRestBar()
         layout->addWidget(chip);
     }
     layout->addStretch(1);
-
-    auto *addEmployee = new QPushButton(tr("Ajouter employé"), bar);
-    addEmployee->setProperty("variant", QStringLiteral("teal"));
-    auto *addStudent = new QPushButton(tr("Ajouter élève"), bar);
-    layout->addWidget(addEmployee);
-    layout->addWidget(addStudent);
-
-    connect(addEmployee, &QPushButton::clicked, this, &MainWindow::openContractBoard);
-    connect(addStudent, &QPushButton::clicked, this, &MainWindow::openClassBoard);
     return bar;
 }
 
@@ -190,7 +345,6 @@ QWidget *MainWindow::buildSearchBar()
     m_search = new QLineEdit(card);
     m_search->setPlaceholderText(tr("🔍 Rechercher par ID ou Nom..."));
     auto *clear = new QPushButton(tr("Effacer"), card);
-    clear->setProperty("variant", QStringLiteral("ghost"));
     layout->addWidget(m_search, 1);
     layout->addWidget(clear);
     connect(m_search, &QLineEdit::textChanged, this, &MainWindow::applySearch);
@@ -215,18 +369,9 @@ QWidget *MainWindow::buildTableCard()
     tabs->addWidget(m_tabEmp);
     tabs->addWidget(m_tabStu);
     tabs->addStretch(1);
-
-    auto *importButton = new QPushButton(tr("Importer Excel"), card);
-    importButton->setProperty("variant", QStringLiteral("ghost"));
-    auto *exportButton = new QPushButton(tr("Exporter Excel"), card);
-    exportButton->setProperty("variant", QStringLiteral("ghost"));
-    tabs->addWidget(importButton);
-    tabs->addWidget(exportButton);
     layout->addLayout(tabs);
     connect(m_tabEmp, &QPushButton::clicked, this, [this]() { setKind(kKindEmployee); });
     connect(m_tabStu, &QPushButton::clicked, this, [this]() { setKind(kKindStudent); });
-    connect(importButton, &QPushButton::clicked, this, &MainWindow::importRoster);
-    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportRoster);
 
     m_table = new QTableWidget(card);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -236,8 +381,6 @@ QWidget *MainWindow::buildTableCard()
     m_table->verticalHeader()->setDefaultSectionSize(kRowHeight);
     connect(m_table, &QTableWidget::cellClicked, this, &MainWindow::onCellClicked);
     layout->addWidget(m_table, 1);
-
-    layout->addWidget(buildStats());
 
     return card;
 }
@@ -383,7 +526,11 @@ void MainWindow::refresh()
     GlassAnim::countUp(m_statEmp, static_cast<int>(employees), [this](int v) { return tr("Employés : %1").arg(v); });
     GlassAnim::countUp(m_statStu, static_cast<int>(students), [this](int v) { return tr("Élèves : %1").arg(v); });
     applySearch();
-    m_header->setPendingCount(m_store.pendingChanges());
+
+    const int pending = static_cast<int>(m_store.pendingChanges());
+    m_header->setPendingCount(pending);
+    if (m_pendingLabel)
+        m_pendingLabel->setText(tr("Modifications en attente d'envoi : %1").arg(pending));
     if (m_dashboard && m_dashboard->isVisible())
         m_dashboard->setSnapshot(buildSnapshot());
 }
@@ -439,10 +586,8 @@ QWidget *MainWindow::makeActionWidget(const QString &personId)
     layout->setSpacing(6);
 
     auto *editPersonButton = new QPushButton(tr("Modifier la fiche"), box);
-    editPersonButton->setProperty("variant", QStringLiteral("ghost"));
     editPersonButton->setProperty("small", QStringLiteral("true"));
     auto *insertButton = new QPushButton(tr("Insérer"), box);
-    insertButton->setProperty("variant", QStringLiteral("teal"));
     insertButton->setProperty("small", QStringLiteral("true"));
     auto *modifyButton = new QPushButton(tr("Modifier"), box);
     modifyButton->setProperty("small", QStringLiteral("true"));
@@ -792,21 +937,6 @@ void MainWindow::liveUpdate()
     m_marks = marks;
     m_restMask = restMask;
     m_dashboard->setSnapshot(buildSnapshot());
-}
-
-QWidget *MainWindow::buildFooter()
-{
-    auto *logout = new QPushButton(tr("Déconnexion"), this);
-    logout->setProperty("variant", QStringLiteral("ghost"));
-    connect(logout, &QPushButton::clicked, this, &MainWindow::logoutRequested);
-
-    auto *row = new QHBoxLayout;
-    row->addWidget(logout);
-    row->addStretch(1);
-
-    auto *footer = new QWidget(this);
-    footer->setLayout(row);
-    return footer;
 }
 
 void MainWindow::refreshAvatar()
