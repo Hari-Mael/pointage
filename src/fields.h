@@ -13,6 +13,7 @@ struct FieldDef {
     bool required;
     QStringList choices;
     QString section;
+    bool hidden = false;
 };
 
 struct KindDef {
