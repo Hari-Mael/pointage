@@ -3,6 +3,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QInputDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -167,7 +168,7 @@ ContractBoardDialog::ContractBoardDialog(CloudStore &store, QWidget *parent)
     : QWidget(parent), m_store(store)
 {
     setObjectName(QStringLiteral("contractBoard"));
-    setStyleSheet(QStringLiteral("QWidget#contractBoard { background: #f6f1e6; }"));
+    setStyleSheet(QStringLiteral("QWidget#contractBoard { background: transparent; }"));
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(10);
@@ -217,10 +218,16 @@ QWidget *ContractBoardDialog::makeColumn(const QString &column)
     connect(list, &ContractList::personDropped, this, &ContractBoardDialog::onPersonDropped);
     parts.layout->addWidget(list, 1);
 
+    auto *actions = new QHBoxLayout;
     auto *add = new QPushButton(tr("+ Ajouter un employé"), parts.frame);
     add->setProperty("variant", QStringLiteral("teal"));
-    parts.layout->addWidget(add);
+    auto *remove = new QPushButton(tr("Supprimer employé"), parts.frame);
+    remove->setProperty("variant", QStringLiteral("red"));
+    actions->addWidget(add, 1);
+    actions->addWidget(remove, 1);
+    parts.layout->addLayout(actions);
     connect(add, &QPushButton::clicked, this, [this, column]() { onAddEmployee(column); });
+    connect(remove, &QPushButton::clicked, this, [this, column]() { onRemoveEmployee(column); });
     return parts.frame;
 }
 
@@ -337,6 +344,43 @@ void ContractBoardDialog::onAddEmployee(const QString &column)
     person.photo = dialog.photo();
     if (!m_store.addPerson(person)) {
         QMessageBox::warning(this, windowTitle(), tr("Ajout impossible : %1").arg(m_store.lastError()));
+        return;
+    }
+    reload();
+    emit changed();
+}
+
+void ContractBoardDialog::onRemoveEmployee(const QString &column)
+{
+    QMap<QString, QString> choices;
+    for (const CloudPerson &person : m_employees) {
+        if (columnFor(fieldOf(person, kContractLabel)) == column)
+            choices.insert(person.code + QStringLiteral(" — ") + person.name, person.id);
+    }
+    if (choices.isEmpty()) {
+        QMessageBox::information(this, windowTitle(), tr("Aucun employé dans cette colonne."));
+        return;
+    }
+
+    bool ok = false;
+    const QString label = QInputDialog::getItem(this, windowTitle(), tr("Employé à supprimer"),
+                                                choices.keys(), 0, false, &ok);
+    if (!ok || !choices.contains(label))
+        return;
+
+    const CloudPerson *found = findEmployee(choices.value(label));
+    if (!found)
+        return;
+    const QString name = found->name;
+    const QString personId = found->id;
+
+    const auto answer = QMessageBox::question(
+        this, windowTitle(), tr("Supprimer %1 et tout son historique ? Cette action est définitive.").arg(name));
+    if (answer != QMessageBox::Yes)
+        return;
+
+    if (!m_store.deletePerson(personId)) {
+        QMessageBox::warning(this, windowTitle(), tr("Suppression impossible : %1").arg(m_store.lastError()));
         return;
     }
     reload();
