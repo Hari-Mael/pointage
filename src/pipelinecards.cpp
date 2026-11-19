@@ -16,9 +16,11 @@ ColumnParts makeColumn(const QString &title, const QColor &dot, QWidget *parent)
     parts.frame->setObjectName(QStringLiteral("pColumn"));
     parts.frame->setMinimumWidth(240);
     parts.frame->setStyleSheet(QStringLiteral(
-        "QFrame#pColumn { background: #f3efe5; border-radius: 24px; }"
-        "QLabel#pTitle { color: #1d1d1f; font-weight: 800; font-size: 11pt; background: transparent; }"
-        "QLabel#pCount { color: #1d1d1f; background: #ffffff; border-radius: 10px; padding: 2px 8px; font-weight: 600; }"));
+        "QFrame#pColumn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
+        " border-radius: 24px; }"
+        "QLabel#pTitle { color: #f4fbf8; font-weight: 800; font-size: 11pt; background: transparent; }"
+        "QLabel#pCount { color: #f4fbf8; background: rgba(255,255,255,0.14); border-radius: 10px;"
+        " padding: 2px 8px; font-weight: 600; }"));
 
     parts.layout = new QVBoxLayout(parts.frame);
     parts.layout->setContentsMargins(12, 12, 12, 12);
