@@ -113,11 +113,10 @@ void ClassList::dropEvent(QDropEvent *event)
 }
 
 ClassBoardDialog::ClassBoardDialog(CloudStore &store, QWidget *parent)
-    : QDialog(parent), m_store(store)
+    : QWidget(parent), m_store(store)
 {
-    setWindowTitle(tr("Élèves par classe"));
-    resize(1200, 680);
-    setStyleSheet(QStringLiteral("QDialog { background: #f6f1e6; }"));
+    setObjectName(QStringLiteral("classBoard"));
+    setStyleSheet(QStringLiteral("QWidget#classBoard { background: #f6f1e6; }"));
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(10);
@@ -152,15 +151,7 @@ ClassBoardDialog::ClassBoardDialog(CloudStore &store, QWidget *parent)
     undoRow->addWidget(m_undoButton);
     layout->addLayout(undoRow);
 
-    auto *close = new QPushButton(tr("Fermer"), this);
-    close->setProperty("variant", QStringLiteral("teal"));
-    auto *buttons = new QHBoxLayout;
-    buttons->addStretch(1);
-    buttons->addWidget(close);
-    layout->addLayout(buttons);
-
     connect(m_undoButton, &QPushButton::clicked, this, &ClassBoardDialog::undoLastMove);
-    connect(close, &QPushButton::clicked, this, &QDialog::accept);
     reload();
 }
 
