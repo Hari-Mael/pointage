@@ -16,9 +16,12 @@ QFrame#topBar { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,2
 QFrame#profile { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px; }
 QLabel#profileName { color: #f4fbf8; font-weight: 700; }
 QLabel#profileMail { color: #9fbfb4; font-size: 9pt; }
+QLabel#bannerKicker { color: #a7f3d0; font-size: 8pt; font-weight: 700; }
+QLabel#bannerTitle { color: #ffffff; font-size: 14pt; font-weight: 800; }
+QPushButton#menuToggle { font-size: 16pt; font-weight: 800; padding: 0px; min-width: 40px; max-width: 40px; min-height: 36px; max-height: 36px; }
+QLineEdit#headerSearch { background: rgba(0,0,0,0.28); color: #eaf6f1; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 8px 14px; }
+QLineEdit#headerSearch:focus { border: 1px solid #34d399; }
 QFrame#banner { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(52,211,153,0.35), stop:1 rgba(245,176,65,0.30)); border: 1px solid rgba(255,255,255,0.14); border-radius: 22px; }
-QLabel#bannerKicker { color: #d1fae5; font-size: 9pt; font-weight: 700; }
-QLabel#bannerTitle { color: #ffffff; font-size: 20pt; font-weight: 800; }
 QComboBox#bannerCombo, QSpinBox#bannerSpin { background: rgba(255,255,255,0.12); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); border-radius: 12px; padding: 6px 10px; }
 )";
 
@@ -36,9 +39,40 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     auto *topBar = new QFrame(this);
     topBar->setObjectName(QStringLiteral("topBar"));
     auto *top = new QHBoxLayout(topBar);
-    top->setContentsMargins(16, 10, 16, 10);
+    top->setContentsMargins(12, 8, 12, 8);
     top->setSpacing(10);
-    top->addStretch(1);
+
+    m_menuToggle = new QPushButton(QStringLiteral("⋮"), topBar);
+    m_menuToggle->setObjectName(QStringLiteral("menuToggle"));
+    m_menuToggle->setToolTip(tr("Afficher / masquer le menu"));
+    top->addWidget(m_menuToggle);
+
+    auto *titles = new QVBoxLayout;
+    titles->setSpacing(0);
+    auto *kicker = new QLabel(tr("FEUILLE DE POINTAGE"), topBar);
+    kicker->setObjectName(QStringLiteral("bannerKicker"));
+    m_school = new QLabel(SchoolInfo::name(), topBar);
+    m_school->setObjectName(QStringLiteral("bannerTitle"));
+    titles->addWidget(kicker);
+    titles->addWidget(m_school);
+    top->addLayout(titles);
+
+    m_search = new QLineEdit(topBar);
+    m_search->setObjectName(QStringLiteral("headerSearch"));
+    m_search->setPlaceholderText(tr("🔍 Rechercher par ID ou Nom..."));
+    m_search->setClearButtonEnabled(true);
+    top->addWidget(m_search, 1);
+
+    const QLocale french(QLocale::French);
+    m_month = new QComboBox(topBar);
+    m_month->setObjectName(QStringLiteral("bannerCombo"));
+    for (int month = 1; month <= 12; ++month)
+        m_month->addItem(french.monthName(month));
+    m_year = new QSpinBox(topBar);
+    m_year->setObjectName(QStringLiteral("bannerSpin"));
+    m_year->setRange(2000, 2100);
+    top->addWidget(m_month);
+    top->addWidget(m_year);
 
     m_bell = new QPushButton(QStringLiteral("🔔"), topBar);
     m_bell->setToolTip(tr("Modifications en attente d'envoi (cliquer pour rafraîchir)"));
@@ -73,34 +107,13 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     auto *banner = new QFrame(this);
     banner->setObjectName(QStringLiteral("banner"));
     auto *bannerLayout = new QHBoxLayout(banner);
-    bannerLayout->setContentsMargins(24, 18, 24, 18);
-    bannerLayout->setSpacing(16);
-
-    auto *titles = new QVBoxLayout;
-    titles->setSpacing(2);
-    auto *kicker = new QLabel(tr("FEUILLE DE POINTAGE"), banner);
-    kicker->setObjectName(QStringLiteral("bannerKicker"));
-    m_school = new QLabel(SchoolInfo::name(), banner);
-    m_school->setObjectName(QStringLiteral("bannerTitle"));
-    titles->addWidget(kicker);
-    titles->addWidget(m_school);
-    bannerLayout->addLayout(titles, 1);
-
-    const QLocale french(QLocale::French);
-    m_month = new QComboBox(banner);
-    m_month->setObjectName(QStringLiteral("bannerCombo"));
-    for (int month = 1; month <= 12; ++month)
-        m_month->addItem(french.monthName(month));
-    m_year = new QSpinBox(banner);
-    m_year->setObjectName(QStringLiteral("bannerSpin"));
-    m_year->setRange(2000, 2100);
-    bannerLayout->addWidget(m_month);
-    bannerLayout->addWidget(m_year);
-
+    bannerLayout->setContentsMargins(24, 14, 24, 14);
+    bannerLayout->addStretch(1);
     auto *schoolSettings = new QPushButton(tr("Voir les paramètres"), banner);
     bannerLayout->addWidget(schoolSettings);
     root->addWidget(banner);
 
+    connect(m_menuToggle, &QPushButton::clicked, this, &HeaderBar::menuToggleRequested);
     connect(m_bell, &QPushButton::clicked, this, &HeaderBar::homeRequested);
     connect(schoolSettings, &QPushButton::clicked, this, &HeaderBar::settingsRequested);
 }
