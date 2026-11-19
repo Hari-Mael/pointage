@@ -45,6 +45,7 @@ private:
     QWidget *makeColumn(const QString &className);
     void onPersonDropped(const QString &personId, const QString &targetClass);
     void onAddStudent(const QString &className);
+    void onRemoveStudent(const QString &className);
     void undoLastMove();
     const CloudPerson *findStudent(const QString &personId) const;
 
