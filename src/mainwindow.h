@@ -4,19 +4,17 @@
 #include <QDate>
 #include <QHash>
 #include <QMainWindow>
-#include <QPointer>
 #include <QSpinBox>
 #include <array>
 #include <vector>
 
 #include "cloudstore.h"
-#include "dashboard.h"
 #include "reports.h"
 
-class DashboardDialog;
 class HeaderBar;
 class QLabel;
 class QLineEdit;
+class QProgressBar;
 class QPushButton;
 class QStackedWidget;
 class QTableWidget;
@@ -48,7 +46,6 @@ private slots:
     void exportRate(const QString &personId, Reports::Rate rate);
     void openSettings();
     void openStudentReport(const QString &personId);
-    void openDashboard();
     void liveUpdate();
     void changeUserAvatar();
     void toggleSidebar();
@@ -63,13 +60,12 @@ private:
     QWidget *buildSettingsPage();
     QWidget *buildRestBar();
     QWidget *buildTableCard();
-    QWidget *buildStats();
     QWidget *makeActionWidget(const QString &personId);
     const CloudPerson *findPerson(const QString &personId) const;
     void reportWriteResult(bool ok, const QString &action);
     void saveReport(const QString &defaultName, const QString &content);
     void refreshAvatar();
-    Dashboard::Snapshot buildSnapshot() const;
+    void updateAnalysis(int year, int month);
 
     int selectedYear() const { return m_yearBox->value(); }
     int selectedMonth() const { return m_monthBox->currentIndex() + 1; }
@@ -83,7 +79,6 @@ private:
     std::vector<CloudPerson> m_all;
     std::vector<CloudPerson> m_people;
     QHash<QString, CloudMarks> m_marks;
-    QPointer<DashboardDialog> m_dashboard;
     QTimer *m_liveTimer = nullptr;
     QPushButton *m_avatarButton = nullptr;
     HeaderBar *m_header = nullptr;
@@ -97,9 +92,10 @@ private:
     QTableWidget *m_table = nullptr;
     QPushButton *m_tabEmp = nullptr;
     QPushButton *m_tabStu = nullptr;
-    QPushButton *m_statPresent = nullptr;
-    QPushButton *m_statAbsent = nullptr;
-    QPushButton *m_statEmp = nullptr;
-    QPushButton *m_statStu = nullptr;
     std::array<QPushButton *, 7> m_chips{};
+    std::array<QLabel *, 4> m_kpiValue{};
+    std::array<QLabel *, 4> m_kpiSub{};
+    QProgressBar *m_rateBar = nullptr;
+    QWidget *m_chart = nullptr;
+    QLabel *m_notifyBody = nullptr;
 };
