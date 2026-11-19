@@ -23,8 +23,9 @@ const char *const kPosteLabel = "Poste";
 
 const QString kCdi = QStringLiteral("CDI");
 const QString kCdd = QStringLiteral("CDD");
-const QString kOther = QStringLiteral("Stage / Autre");
-const QStringList kColumns{kCdi, kCdd, kOther};
+const QString kInterim = QStringLiteral("Intérim");
+const QString kOther = QStringLiteral("Autres");
+const QStringList kColumns{kCdi, kCdd, kInterim, kOther};
 
 int indexOfField(const char *label)
 {
@@ -58,6 +59,8 @@ QString columnFor(const QString &contract)
         return kCdi;
     if (contract == kCdd)
         return kCdd;
+    if (contract == kInterim)
+        return kInterim;
     return kOther;
 }
 
@@ -67,6 +70,8 @@ QString contractFor(const QString &column)
         return kCdi;
     if (column == kCdd)
         return kCdd;
+    if (column == kInterim)
+        return kInterim;
     return QStringLiteral("Stage");
 }
 
@@ -76,6 +81,8 @@ CardTone toneFor(const QString &column)
         return {QColor("#1f6b4f"), QColor("#ffffff"), QColor("#1f6b4f")};
     if (column == kCdd)
         return {QColor("#f5c542"), QColor("#1d1d1f"), QColor("#f5c542")};
+    if (column == kInterim)
+        return {QColor("#7c5cbf"), QColor("#ffffff"), QColor("#7c5cbf")};
     return {QColor("#e8553d"), QColor("#ffffff"), QColor("#e8553d")};
 }
 
@@ -157,11 +164,10 @@ void ContractList::dropEvent(QDropEvent *event)
 }
 
 ContractBoardDialog::ContractBoardDialog(CloudStore &store, QWidget *parent)
-    : QDialog(parent), m_store(store)
+    : QWidget(parent), m_store(store)
 {
-    setWindowTitle(tr("Employés par type de contrat"));
-    resize(1000, 640);
-    setStyleSheet(QStringLiteral("QDialog { background: #f6f1e6; }"));
+    setObjectName(QStringLiteral("contractBoard"));
+    setStyleSheet(QStringLiteral("QWidget#contractBoard { background: #f6f1e6; }"));
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(10);
@@ -195,15 +201,7 @@ ContractBoardDialog::ContractBoardDialog(CloudStore &store, QWidget *parent)
     undoRow->addWidget(m_undoButton);
     layout->addLayout(undoRow);
 
-    auto *close = new QPushButton(tr("Fermer"), this);
-    close->setProperty("variant", QStringLiteral("teal"));
-    auto *buttons = new QHBoxLayout;
-    buttons->addStretch(1);
-    buttons->addWidget(close);
-    layout->addLayout(buttons);
-
     connect(m_undoButton, &QPushButton::clicked, this, &ContractBoardDialog::undoLastMove);
-    connect(close, &QPushButton::clicked, this, &QDialog::accept);
     reload();
 }
 
