@@ -90,6 +90,8 @@ add_executable(pointage
     src/glass.cpp
     src/sidebar.h
     src/sidebar.cpp
+    src/accountpanel.h
+    src/accountpanel.cpp
     resources/resources.qrc
 )
 
