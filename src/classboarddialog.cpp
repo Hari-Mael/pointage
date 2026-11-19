@@ -3,6 +3,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QInputDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -176,10 +177,16 @@ QWidget *ClassBoardDialog::makeColumn(const QString &className)
     connect(list, &ClassList::personDropped, this, &ClassBoardDialog::onPersonDropped);
     parts.layout->addWidget(list, 1);
 
+    auto *actions = new QHBoxLayout;
     auto *add = new QPushButton(tr("+ Ajouter un élève"), parts.frame);
     add->setProperty("variant", QStringLiteral("teal"));
-    parts.layout->addWidget(add);
+    auto *remove = new QPushButton(tr("Supprimer élève"), parts.frame);
+    remove->setProperty("variant", QStringLiteral("red"));
+    actions->addWidget(add, 1);
+    actions->addWidget(remove, 1);
+    parts.layout->addLayout(actions);
     connect(add, &QPushButton::clicked, this, [this, className]() { onAddStudent(className); });
+    connect(remove, &QPushButton::clicked, this, [this, className]() { onRemoveStudent(className); });
     return parts.frame;
 }
 
@@ -294,6 +301,43 @@ void ClassBoardDialog::onAddStudent(const QString &className)
     person.photo = dialog.photo();
     if (!m_store.addPerson(person)) {
         QMessageBox::warning(this, windowTitle(), tr("Ajout impossible : %1").arg(m_store.lastError()));
+        return;
+    }
+    reload();
+    emit changed();
+}
+
+void ClassBoardDialog::onRemoveStudent(const QString &className)
+{
+    QMap<QString, QString> choices;
+    for (const CloudPerson &person : m_students) {
+        if (person.className == className)
+            choices.insert(person.code + QStringLiteral(" — ") + person.name, person.id);
+    }
+    if (choices.isEmpty()) {
+        QMessageBox::information(this, windowTitle(), tr("Aucun élève dans cette classe."));
+        return;
+    }
+
+    bool ok = false;
+    const QString label = QInputDialog::getItem(this, windowTitle(), tr("Élève à supprimer"),
+                                                choices.keys(), 0, false, &ok);
+    if (!ok || !choices.contains(label))
+        return;
+
+    const CloudPerson *found = findStudent(choices.value(label));
+    if (!found)
+        return;
+    const QString name = found->name;
+    const QString personId = found->id;
+
+    const auto answer = QMessageBox::question(
+        this, windowTitle(), tr("Supprimer %1 et tout son historique ? Cette action est définitive.").arg(name));
+    if (answer != QMessageBox::Yes)
+        return;
+
+    if (!m_store.deletePerson(personId)) {
+        QMessageBox::warning(this, windowTitle(), tr("Suppression impossible : %1").arg(m_store.lastError()));
         return;
     }
     reload();
