@@ -211,20 +211,33 @@ QWidget *MainWindow::buildActionsPage()
     layout->setSpacing(12);
     layout->addWidget(makeTitle(tr("Actions"), page));
 
-    auto *addEmployee = new QPushButton(tr("Ajouter employé"), page);
-    connect(addEmployee, &QPushButton::clicked, this, &MainWindow::openContractBoard);
-    auto *addStudent = new QPushButton(tr("Ajouter élève"), page);
-    connect(addStudent, &QPushButton::clicked, this, &MainWindow::openClassBoard);
+    auto *employeeBoard = new ContractBoardDialog(m_store, page);
+    auto *classBoard = new ClassBoardDialog(m_store, page);
+    employeeBoard->hide();
+    classBoard->hide();
+    connect(employeeBoard, &ContractBoardDialog::changed, this, &MainWindow::refresh);
+    connect(classBoard, &ClassBoardDialog::changed, this, &MainWindow::refresh);
 
-    auto *row = new QHBoxLayout;
-    row->setSpacing(12);
-    row->addWidget(makeInfoCard(tr("Ajouter un employé"),
-                                tr("Créer une fiche employé et définir son contrat."), addEmployee, page), 1);
-    row->addWidget(makeInfoCard(tr("Ajouter un élève"),
-                                tr("Créer une fiche élève dans une classe, ou déplacer un élève entre classes."),
-                                addStudent, page), 1);
-    layout->addLayout(row);
-    layout->addStretch(1);
+    auto *addEmployee = new QPushButton(tr("Ajouter employé"), page);
+    auto *addStudent = new QPushButton(tr("Ajouter élève"), page);
+    connect(addEmployee, &QPushButton::clicked, this, [employeeBoard, classBoard]() {
+        classBoard->hide();
+        employeeBoard->setVisible(!employeeBoard->isVisible());
+    });
+    connect(addStudent, &QPushButton::clicked, this, [employeeBoard, classBoard]() {
+        employeeBoard->hide();
+        classBoard->setVisible(!classBoard->isVisible());
+    });
+
+    auto *buttons = new QHBoxLayout;
+    buttons->setSpacing(10);
+    buttons->addWidget(addEmployee);
+    buttons->addWidget(addStudent);
+    buttons->addStretch(1);
+    layout->addLayout(buttons);
+
+    layout->addWidget(employeeBoard, 1);
+    layout->addWidget(classBoard, 1);
     return page;
 }
 
