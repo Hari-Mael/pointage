@@ -86,6 +86,12 @@ PersonDialog::PersonDialog(int kind, const QString &suggestedCode, const QString
 
     QString currentSection;
     for (const FieldDef &field : def.fields) {
+        if (field.hidden) {
+            QWidget *hiddenInput = makeInput(field, this);
+            hiddenInput->hide();
+            m_inputs.push_back(hiddenInput);
+            continue;
+        }
         if (field.section != currentSection) {
             currentSection = field.section;
             form->addRow(new QLabel(QStringLiteral("<b>%1</b>").arg(currentSection), this));
