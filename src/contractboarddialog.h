@@ -45,6 +45,7 @@ private:
     void reload();
     void onPersonDropped(const QString &personId, const QString &targetColumn);
     void onAddEmployee(const QString &column);
+    void onRemoveEmployee(const QString &column);
     void undoLastMove();
     const CloudPerson *findEmployee(const QString &personId) const;
 
