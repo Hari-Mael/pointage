@@ -1,8 +1,8 @@
 #pragma once
 
-#include <QDialog>
 #include <QListWidget>
 #include <QMap>
+#include <QWidget>
 #include <vector>
 
 #include "cloudstore.h"
@@ -32,7 +32,7 @@ private:
     QString m_className;
 };
 
-class ClassBoardDialog : public QDialog {
+class ClassBoardDialog : public QWidget {
     Q_OBJECT
 public:
     explicit ClassBoardDialog(CloudStore &store, QWidget *parent = nullptr);
