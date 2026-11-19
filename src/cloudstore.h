@@ -28,6 +28,7 @@ public:
     CloudStore(const SupabaseSession &session, const QString &dataDir);
 
     QString lastError() const { return m_lastError; }
+    QString accessToken() const { return m_session.accessToken; }
     int pendingChanges() const { return m_local.pendingCount(); }
 
     bool fetchPeople(std::vector<CloudPerson> &people);
