@@ -24,16 +24,20 @@ QString messageFrom(const QJsonObject &reply)
 
 }
 
-bool SupabaseAuth::post(const QString &path, const QJsonObject &body, QJsonObject &reply, QString &error)
+bool SupabaseAuth::send(const QByteArray &method, const QString &path, const QString &bearer,
+                        const QJsonObject &body, QJsonObject &reply, QString &error)
 {
     QNetworkAccessManager manager;
     QNetworkRequest request(QUrl(Config::kSupabaseUrl + path));
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("apikey", Config::kSupabaseAnonKey.toUtf8());
-    request.setRawHeader("Authorization", QByteArray("Bearer ") + Config::kSupabaseAnonKey.toUtf8());
+    const QString token = bearer.isEmpty() ? Config::kSupabaseAnonKey : bearer;
+    request.setRawHeader("Authorization", QByteArray("Bearer ") + token.toUtf8());
     request.setTransferTimeout(15000);
 
-    QNetworkReply *response = manager.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    QNetworkReply *response = method == QByteArrayLiteral("PUT") ? manager.put(request, payload)
+                                                                 : manager.post(request, payload);
     QEventLoop loop;
     QObject::connect(response, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     loop.exec();
@@ -48,6 +52,11 @@ bool SupabaseAuth::post(const QString &path, const QJsonObject &body, QJsonObjec
     }
     response->deleteLater();
     return ok;
+}
+
+bool SupabaseAuth::post(const QString &path, const QJsonObject &body, QJsonObject &reply, QString &error)
+{
+    return send("POST", path, QString(), body, reply, error);
 }
 
 bool SupabaseAuth::sessionFrom(const QJsonObject &reply, SupabaseSession &session)
@@ -102,4 +111,13 @@ bool SupabaseAuth::sendPasswordReset(const QString &email, QString &error)
     QJsonObject reply;
     const QJsonObject body{{"email", email}};
     return post(QStringLiteral("/auth/v1/recover"), body, reply, error);
+}
+
+bool SupabaseAuth::updateUser(const QString &accessToken, const QJsonObject &body, QString &email, QString &error)
+{
+    QJsonObject reply;
+    if (!send("PUT", QStringLiteral("/auth/v1/user"), accessToken, body, reply, error))
+        return false;
+    email = reply.value(QLatin1String("email")).toString();
+    return true;
 }
