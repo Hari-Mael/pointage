@@ -2,7 +2,6 @@
 
 #include <QColor>
 #include <QComboBox>
-#include <QDialog>
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
@@ -56,7 +55,6 @@ constexpr int kRowHeight = 40;
 constexpr int kAbsenceRecidive = 2;
 constexpr double kPi = 3.14159265358979323846;
 
-// Ordre des pages : identique à l'ordre de Sidebar::Section.
 constexpr int kPageHome = 0;
 constexpr int kPageDashboard = 1;
 constexpr int kPageActions = 2;
@@ -94,7 +92,6 @@ QLabel *makeMuted(const QString &text, QWidget *parent)
     return label;
 }
 
-// Carte cliquable : un QPushButton contenant titre, valeur et texte secondaire.
 QPushButton *makeClickCard(const QString &title, const QString &hint, QLabel *&value, QLabel *&sub, QWidget *parent)
 {
     auto *card = new QPushButton(parent);
@@ -222,7 +219,6 @@ private:
     int m_value = 0;
 };
 
-// Jauge demi-cercle avec aiguille, utilisée dans les rapports.
 class NeedleGauge : public QWidget {
 public:
     explicit NeedleGauge(QWidget *parent = nullptr) : QWidget(parent)
@@ -271,38 +267,6 @@ protected:
 private:
     int m_value = 0;
 };
-
-void showReportDialog(QWidget *parent, const QString &title, int percent, const QString &summary,
-                      const QStringList &items)
-{
-    QDialog dialog(parent);
-    dialog.setWindowTitle(title);
-    dialog.resize(520, 600);
-
-    auto *layout = new QVBoxLayout(&dialog);
-    auto *gauge = new NeedleGauge(&dialog);
-    gauge->setValue(percent);
-    layout->addWidget(gauge, 1);
-
-    auto *value = new QLabel(QStringLiteral("%1 %").arg(percent), &dialog);
-    value->setObjectName(QStringLiteral("title"));
-    value->setAlignment(Qt::AlignCenter);
-    layout->addWidget(value);
-
-    auto *text = new QLabel(summary, &dialog);
-    text->setWordWrap(true);
-    layout->addWidget(text);
-
-    auto *list = new QListWidget(&dialog);
-    list->addItems(items);
-    layout->addWidget(list, 2);
-
-    auto *close = new QPushButton(QObject::tr("Fermer"), &dialog);
-    QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
-    layout->addWidget(close, 0, Qt::AlignRight);
-
-    dialog.exec();
-}
 
 }
 
@@ -448,6 +412,33 @@ QWidget *MainWindow::buildDashboardPage()
         kpiRow->addWidget(card, 1);
     }
     layout->addLayout(kpiRow);
+
+    QFrame *reportCard = makeCard(page);
+    reportCard->setMinimumHeight(300);
+    auto *reportLayout = new QHBoxLayout(reportCard);
+    reportLayout->setContentsMargins(20, 16, 20, 16);
+    reportLayout->setSpacing(16);
+
+    auto *gaugeColumn = new QVBoxLayout;
+    m_reportTitle = makeTitle(QString(), reportCard);
+    gaugeColumn->addWidget(m_reportTitle);
+    m_reportGauge = new NeedleGauge(reportCard);
+    gaugeColumn->addWidget(m_reportGauge, 1);
+    m_reportValue = makeTitle(QString(), reportCard);
+    m_reportValue->setAlignment(Qt::AlignCenter);
+    gaugeColumn->addWidget(m_reportValue);
+    reportLayout->addLayout(gaugeColumn, 1);
+
+    auto *detailColumn = new QVBoxLayout;
+    m_reportSummary = makeMuted(QString(), reportCard);
+    detailColumn->addWidget(m_reportSummary);
+    m_reportList = new QListWidget(reportCard);
+    m_reportList->setStyleSheet(QStringLiteral(
+        "QListWidget { background: rgba(0,0,0,0.25); color: #eaf6f1; border: 1px solid rgba(255,255,255,0.10);"
+        " border-radius: 14px; padding: 6px; }"));
+    detailColumn->addWidget(m_reportList, 1);
+    reportLayout->addLayout(detailColumn, 2);
+    layout->addWidget(reportCard);
 
     auto *middle = new QHBoxLayout;
     middle->setSpacing(12);
@@ -898,9 +889,17 @@ void MainWindow::updateAnalysis(int year, int month)
     m_notifyBody->setText(m_notifications.isEmpty()
                               ? tr("Aucune notification pour cette période.")
                               : m_notifications.join(QLatin1Char('\n')));
+
+    renderReport();
 }
 
 void MainWindow::openKpiReport(int index)
+{
+    m_reportIndex = index;
+    renderReport();
+}
+
+void MainWindow::renderReport()
 {
     const int possible = std::max(1, m_possibleTotal);
     int percent = 0;
@@ -908,7 +907,7 @@ void MainWindow::openKpiReport(int index)
     QString summary;
     QStringList items;
 
-    switch (index) {
+    switch (m_reportIndex) {
     case 0:
         title = tr("Présence — taux de présentéisme");
         percent = m_presentTotal * 100 / possible;
@@ -939,7 +938,13 @@ void MainWindow::openKpiReport(int index)
 
     if (items.isEmpty())
         items << tr("Aucune donnée pour cette période.");
-    showReportDialog(this, title, percent, summary, items);
+
+    m_reportTitle->setText(title);
+    m_reportValue->setText(QStringLiteral("%1 %").arg(percent));
+    m_reportSummary->setText(summary);
+    m_reportList->clear();
+    m_reportList->addItems(items);
+    static_cast<NeedleGauge *>(m_reportGauge)->setValue(percent);
 }
 
 void MainWindow::showNotifications()
