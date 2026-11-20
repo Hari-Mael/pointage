@@ -5,6 +5,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLocale>
+#include <QResizeEvent>
 #include <QVBoxLayout>
 
 #include "schoolinfo.h"
@@ -45,24 +46,27 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     m_menuToggle->setToolTip(tr("Afficher / masquer le menu"));
     top->addWidget(m_menuToggle);
 
-    m_school = new QLabel(SchoolInfo::name(), topBar);
-    m_school->setObjectName(QStringLiteral("bannerTitle"));
-    top->addWidget(m_school);
+    m_schoolTitle = new QLabel(SchoolInfo::name(), topBar);
+    m_schoolTitle->setObjectName(QStringLiteral("bannerTitle"));
+    top->addWidget(m_schoolTitle);
 
     m_search = new QLineEdit(topBar);
     m_search->setObjectName(QStringLiteral("headerSearch"));
     m_search->setPlaceholderText(tr("🔍 Rechercher par ID ou Nom..."));
     m_search->setClearButtonEnabled(true);
+    m_search->setMinimumWidth(140);
     top->addWidget(m_search, 1);
 
     const QLocale french(QLocale::French);
     m_month = new QComboBox(topBar);
     m_month->setObjectName(QStringLiteral("bannerCombo"));
+    m_month->setMinimumWidth(110);
     for (int month = 1; month <= 12; ++month)
         m_month->addItem(french.monthName(month));
     m_year = new QSpinBox(topBar);
     m_year->setObjectName(QStringLiteral("bannerSpin"));
     m_year->setRange(2000, 2100);
+    m_year->setMinimumWidth(80);
     top->addWidget(m_month);
     top->addWidget(m_year);
 
@@ -77,14 +81,14 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     profileLayout->setSpacing(10);
     auto *names = new QVBoxLayout;
     names->setSpacing(0);
-    auto *name = new QLabel(userName, profile);
-    name->setObjectName(QStringLiteral("profileName"));
-    name->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    auto *mail = new QLabel(userEmail, profile);
-    mail->setObjectName(QStringLiteral("profileMail"));
-    mail->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    names->addWidget(name);
-    names->addWidget(mail);
+    m_profileName = new QLabel(userName, profile);
+    m_profileName->setObjectName(QStringLiteral("profileName"));
+    m_profileName->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_profileMail = new QLabel(userEmail, profile);
+    m_profileMail->setObjectName(QStringLiteral("profileMail"));
+    m_profileMail->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    names->addWidget(m_profileName);
+    names->addWidget(m_profileMail);
     m_avatar = new QPushButton(profile);
     m_avatar->setFlat(true);
     m_avatar->setIconSize(QSize(40, 40));
@@ -98,6 +102,15 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
 
     connect(m_menuToggle, &QPushButton::clicked, this, &HeaderBar::menuToggleRequested);
     connect(m_bell, &QPushButton::clicked, this, &HeaderBar::notificationsRequested);
+}
+
+void HeaderBar::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    const int w = width();
+    m_schoolTitle->setVisible(w >= 1100);
+    m_profileMail->setVisible(w >= 1000);
+    m_profileName->setVisible(w >= 900);
 }
 
 void HeaderBar::setAvatar(const QPixmap &avatar)
