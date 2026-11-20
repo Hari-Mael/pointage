@@ -37,7 +37,7 @@ Sidebar::Sidebar(QWidget *parent)
         item->setCursor(Qt::PointingHandCursor);
         group->addButton(item);
         layout->addWidget(item);
-        m_items.push_back(item);
+        m_items[static_cast<size_t>(section)] = item;
         connect(item, &QPushButton::clicked, this, [this, section]() {
             setCurrentSection(section);
             emit sectionChanged(static_cast<int>(section));
@@ -49,7 +49,6 @@ Sidebar::Sidebar(QWidget *parent)
     addItem(tr("📊  Tableau de bord"), Dashboard);
     addHeader(tr("GESTION"));
     addItem(tr("➕  Actions"), Actions);
-    addItem(tr("📋  Fiche de présence"), Analysis);
     addHeader(tr("CONFIGURATION"));
     addItem(tr("🗓  Plans"), Plans);
     addItem(tr("⚙  Paramètres"), Settings);
@@ -66,7 +65,8 @@ Sidebar::Sidebar(QWidget *parent)
 
 void Sidebar::setCurrentSection(Section section)
 {
-    const size_t index = static_cast<size_t>(section);
-    for (size_t i = 0; i < m_items.size(); ++i)
-        m_items[i]->setChecked(i == index);
+    for (size_t i = 0; i < m_items.size(); ++i) {
+        if (m_items[i])
+            m_items[i]->setChecked(i == static_cast<size_t>(section));
+    }
 }
