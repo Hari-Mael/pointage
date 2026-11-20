@@ -45,10 +45,11 @@ Sidebar::Sidebar(QWidget *parent)
     };
 
     addHeader(tr("PRINCIPAL"));
+    addItem(tr("🏠  Accueil"), Home);
     addItem(tr("📊  Tableau de bord"), Dashboard);
     addHeader(tr("GESTION"));
     addItem(tr("➕  Actions"), Actions);
-    addItem(tr("📈  Analyse"), Analysis);
+    addItem(tr("📋  Fiche de présence"), Analysis);
     addHeader(tr("CONFIGURATION"));
     addItem(tr("🗓  Plans"), Plans);
     addItem(tr("⚙  Paramètres"), Settings);
@@ -60,7 +61,7 @@ Sidebar::Sidebar(QWidget *parent)
     connect(logout, &QPushButton::clicked, this, &Sidebar::logoutRequested);
     layout->addWidget(logout);
 
-    setCurrentSection(Dashboard);
+    setCurrentSection(Home);
 }
 
 void Sidebar::setCurrentSection(Section section)
