@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QMainWindow>
 #include <QSpinBox>
+#include <QStringList>
 #include <array>
 #include <vector>
 
@@ -31,6 +32,7 @@ signals:
 private slots:
     void refresh();
     void applySearch();
+    void onSearchChanged();
     void onCellClicked(int row, int column);
     void addPerson();
     void editPerson(const QString &personId);
@@ -45,6 +47,9 @@ private slots:
     void exportRate(const QString &personId, Reports::Rate rate);
     void openSettings();
     void openStudentReport(const QString &personId);
+    void openKpiReport(int index);
+    void showNotifications();
+    void showSection(int page);
     void liveUpdate();
     void changeUserAvatar();
     void toggleSidebar();
@@ -52,6 +57,7 @@ private slots:
 private:
     void buildUi();
     QWidget *buildHeader();
+    QWidget *buildHomePage();
     QWidget *buildDashboardPage();
     QWidget *buildActionsPage();
     QWidget *buildAnalysisPage();
@@ -92,9 +98,20 @@ private:
     QPushButton *m_tabEmp = nullptr;
     QPushButton *m_tabStu = nullptr;
     std::array<QPushButton *, 7> m_chips{};
+    std::array<QLabel *, 3> m_homeValue{};
     std::array<QLabel *, 4> m_kpiValue{};
     std::array<QLabel *, 4> m_kpiSub{};
     QWidget *m_rate = nullptr;
     QWidget *m_chart = nullptr;
     QLabel *m_notifyBody = nullptr;
+
+    int m_presentTotal = 0;
+    int m_absentTotal = 0;
+    int m_lateTotal = 0;
+    int m_possibleTotal = 0;
+    int m_peopleCount = 0;
+    QStringList m_presenceLines;
+    QStringList m_absenceLines;
+    QStringList m_lateLines;
+    QStringList m_notifications;
 };
