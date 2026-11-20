@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
+#include <QFont>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -14,7 +15,6 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
-#include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
@@ -141,6 +141,51 @@ private:
     std::vector<int> m_values;
 };
 
+class RateRing : public QWidget {
+public:
+    explicit RateRing(QWidget *parent = nullptr) : QWidget(parent)
+    {
+        setMinimumSize(160, 160);
+    }
+
+    void setValue(int value)
+    {
+        m_value = std::clamp(value, 0, 100);
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const double side = std::min(width(), height()) - 24.0;
+        const QRectF rect((width() - side) / 2.0, (height() - side) / 2.0, side, side);
+
+        QPen track(QColor(255, 255, 255, 40));
+        track.setWidth(14);
+        track.setCapStyle(Qt::RoundCap);
+        painter.setPen(track);
+        painter.drawArc(rect, 0, 360 * 16);
+
+        QPen arc(QColor(52, 211, 153));
+        arc.setWidth(14);
+        arc.setCapStyle(Qt::RoundCap);
+        painter.setPen(arc);
+        painter.drawArc(rect, 90 * 16, -m_value * 360 * 16 / 100);
+
+        QFont font = painter.font();
+        font.setPointSize(20);
+        font.setBold(true);
+        painter.setFont(font);
+        painter.setPen(QColor("#f4fbf8"));
+        painter.drawText(rect, Qt::AlignCenter, QStringLiteral("%1%").arg(m_value));
+    }
+
+private:
+    int m_value = 0;
+};
+
 }
 
 MainWindow::MainWindow(CloudStore &store, const QString &userName, const QString &userEmail, QWidget *parent)
@@ -248,6 +293,7 @@ QWidget *MainWindow::buildActionsPage()
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
+    layout->setAlignment(Qt::AlignTop);
     layout->addWidget(makeTitle(tr("Actions"), page));
 
     auto *employeeBoard = new ContractBoardDialog(m_store, page);
@@ -257,8 +303,29 @@ QWidget *MainWindow::buildActionsPage()
     connect(employeeBoard, &ContractBoardDialog::changed, this, &MainWindow::refresh);
     connect(classBoard, &ClassBoardDialog::changed, this, &MainWindow::refresh);
 
-    auto *addEmployee = new QPushButton(tr("Ajouter employé"), page);
-    auto *addStudent = new QPushButton(tr("Ajouter élève"), page);
+    QFrame *employeeCard = makeCard(page);
+    auto *employeeLayout = new QVBoxLayout(employeeCard);
+    employeeLayout->setContentsMargins(20, 20, 20, 20);
+    employeeLayout->setSpacing(8);
+    employeeLayout->addWidget(makeTitle(tr("Employés"), employeeCard));
+    employeeLayout->addWidget(makeMuted(tr("Créer une fiche employé et définir son contrat."), employeeCard));
+    employeeLayout->addStretch(1);
+    auto *addEmployee = new QPushButton(tr("Ajouter employé"), employeeCard);
+    addEmployee->setMinimumHeight(44);
+    employeeLayout->addWidget(addEmployee);
+
+    QFrame *studentCard = makeCard(page);
+    auto *studentLayout = new QVBoxLayout(studentCard);
+    studentLayout->setContentsMargins(20, 20, 20, 20);
+    studentLayout->setSpacing(8);
+    studentLayout->addWidget(makeTitle(tr("Élèves"), studentCard));
+    studentLayout->addWidget(makeMuted(tr("Créer une fiche élève dans une classe, ou déplacer un élève entre classes."),
+                                       studentCard));
+    studentLayout->addStretch(1);
+    auto *addStudent = new QPushButton(tr("Ajouter élève"), studentCard);
+    addStudent->setMinimumHeight(44);
+    studentLayout->addWidget(addStudent);
+
     connect(addEmployee, &QPushButton::clicked, this, [employeeBoard, classBoard]() {
         classBoard->hide();
         employeeBoard->setVisible(!employeeBoard->isVisible());
@@ -268,11 +335,11 @@ QWidget *MainWindow::buildActionsPage()
         classBoard->setVisible(!classBoard->isVisible());
     });
 
-    auto *buttons = new QHBoxLayout;
-    buttons->addWidget(addEmployee);
-    buttons->addStretch(1);
-    buttons->addWidget(addStudent);
-    layout->addLayout(buttons);
+    auto *cards = new QHBoxLayout;
+    cards->setSpacing(12);
+    cards->addWidget(employeeCard, 1);
+    cards->addWidget(studentCard, 1);
+    layout->addLayout(cards);
 
     layout->addWidget(employeeBoard, 1);
     layout->addWidget(classBoard, 1);
@@ -319,11 +386,8 @@ QWidget *MainWindow::buildAnalysisPage()
     auto *rateLayout = new QVBoxLayout(rateCard);
     rateLayout->setContentsMargins(20, 16, 20, 16);
     rateLayout->addWidget(makeTitle(tr("Taux de présence du mois"), rateCard));
-    m_rateBar = new QProgressBar(rateCard);
-    m_rateBar->setRange(0, 100);
-    m_rateBar->setTextVisible(true);
-    rateLayout->addWidget(m_rateBar);
-    rateLayout->addStretch(1);
+    m_rate = new RateRing(rateCard);
+    rateLayout->addWidget(m_rate, 1, Qt::AlignCenter);
     middle->addWidget(rateCard, 1);
     layout->addLayout(middle, 1);
 
@@ -331,9 +395,18 @@ QWidget *MainWindow::buildAnalysisPage()
     auto *notifyLayout = new QVBoxLayout(notifyCard);
     notifyLayout->setContentsMargins(20, 16, 20, 16);
     notifyLayout->addWidget(makeTitle(tr("Notifications"), notifyCard));
-    m_notifyBody = makeMuted(QString(), notifyCard);
+    auto *notifyScroll = new QScrollArea(notifyCard);
+    notifyScroll->setWidgetResizable(true);
+    notifyScroll->setFrameShape(QFrame::NoFrame);
+    notifyScroll->setMinimumHeight(160);
+    notifyScroll->setMaximumHeight(240);
+    notifyScroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; }"));
+    notifyScroll->viewport()->setAutoFillBackground(false);
+    m_notifyBody = makeMuted(QString(), notifyScroll);
     m_notifyBody->setTextFormat(Qt::PlainText);
-    notifyLayout->addWidget(m_notifyBody);
+    m_notifyBody->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    notifyScroll->setWidget(m_notifyBody);
+    notifyLayout->addWidget(notifyScroll);
     layout->addWidget(notifyCard);
 
     QFrame *tools = makeCard(page);
@@ -474,6 +547,15 @@ QWidget *MainWindow::buildTableCard()
     layout->addWidget(m_table, 1);
 
     return card;
+}
+
+QWidget *MainWindow::buildStats()
+{
+    auto *row = new QWidget(this);
+    auto *layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(10);
+    return row;
 }
 
 void MainWindow::refresh()
@@ -648,7 +730,7 @@ void MainWindow::updateAnalysis(int year, int month)
     m_kpiValue[3]->setText(QString::number(notifications.size()));
     m_kpiSub[3]->setText(tr("personne(s) à suivre"));
 
-    m_rateBar->setValue(rate);
+    static_cast<RateRing *>(m_rate)->setValue(rate);
 
     std::vector<int> series(static_cast<size_t>(days), 0);
     for (int day = 1; day <= days; ++day)
