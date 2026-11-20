@@ -15,6 +15,7 @@
 class HeaderBar;
 class QLabel;
 class QLineEdit;
+class QListWidget;
 class QPushButton;
 class QStackedWidget;
 class QTableWidget;
@@ -71,6 +72,7 @@ private:
     void saveReport(const QString &defaultName, const QString &content);
     void refreshAvatar();
     void updateAnalysis(int year, int month);
+    void renderReport();
 
     int selectedYear() const { return m_yearBox->value(); }
     int selectedMonth() const { return m_monthBox->currentIndex() + 1; }
@@ -104,6 +106,13 @@ private:
     QWidget *m_rate = nullptr;
     QWidget *m_chart = nullptr;
     QLabel *m_notifyBody = nullptr;
+
+    QWidget *m_reportGauge = nullptr;
+    QLabel *m_reportTitle = nullptr;
+    QLabel *m_reportValue = nullptr;
+    QLabel *m_reportSummary = nullptr;
+    QListWidget *m_reportList = nullptr;
+    int m_reportIndex = 0;
 
     int m_presentTotal = 0;
     int m_absentTotal = 0;
