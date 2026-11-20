@@ -17,6 +17,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
+class QResizeEvent;
 class QStackedWidget;
 class QTableWidget;
 class QTimer;
@@ -29,6 +30,9 @@ public:
 
 signals:
     void logoutRequested();
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
 private slots:
     void refresh();
@@ -123,4 +127,6 @@ private:
     QStringList m_absenceLines;
     QStringList m_lateLines;
     QStringList m_notifications;
+
+    bool m_narrow = false;
 };
