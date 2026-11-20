@@ -67,7 +67,7 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     top->addWidget(m_year);
 
     m_bell = new QPushButton(QStringLiteral("🔔"), topBar);
-    m_bell->setToolTip(tr("Modifications en attente d'envoi (cliquer pour rafraîchir)"));
+    m_bell->setToolTip(tr("Notifications"));
     top->addWidget(m_bell);
 
     auto *profile = new QFrame(topBar);
@@ -97,7 +97,7 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     root->addWidget(topBar);
 
     connect(m_menuToggle, &QPushButton::clicked, this, &HeaderBar::menuToggleRequested);
-    connect(m_bell, &QPushButton::clicked, this, &HeaderBar::homeRequested);
+    connect(m_bell, &QPushButton::clicked, this, &HeaderBar::notificationsRequested);
 }
 
 void HeaderBar::setAvatar(const QPixmap &avatar)
@@ -105,9 +105,10 @@ void HeaderBar::setAvatar(const QPixmap &avatar)
     m_avatar->setIcon(QIcon(avatar));
 }
 
-void HeaderBar::setPendingCount(int count)
+void HeaderBar::setBellCount(int notifications, int pending)
 {
-    m_bell->setText(count > 0 ? QStringLiteral("🔔 %1").arg(count) : QStringLiteral("🔔"));
-    m_bell->setToolTip(count > 0 ? tr("%1 modification(s) en attente d'envoi").arg(count)
-                                 : tr("Tout est synchronisé"));
+    m_bell->setText(notifications > 0 ? QStringLiteral("🔔 %1").arg(notifications) : QStringLiteral("🔔"));
+    m_bell->setToolTip(tr("%1 notification(s) — %2 modification(s) en attente d'envoi")
+                           .arg(notifications)
+                           .arg(pending));
 }
