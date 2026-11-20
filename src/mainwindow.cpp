@@ -283,7 +283,75 @@ QWidget *MainWindow::buildDashboardPage()
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
-    layout->addWidget(buildTableCard(), 1);
+    layout->addWidget(makeTitle(tr("Tableau de bord"), page));
+
+    const QStringList titles{tr("Présence"), tr("Absence"), tr("Retard"), tr("Notifications")};
+    auto *kpiRow = new QHBoxLayout;
+    kpiRow->setSpacing(12);
+    for (int i = 0; i < 4; ++i) {
+        QFrame *card = makeCard(page);
+        auto *cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(18, 14, 18, 14);
+        cardLayout->setSpacing(4);
+        cardLayout->addWidget(makeMuted(titles.at(i), card));
+        m_kpiValue[static_cast<size_t>(i)] = makeTitle(QStringLiteral("0"), card);
+        m_kpiSub[static_cast<size_t>(i)] = makeMuted(QString(), card);
+        cardLayout->addWidget(m_kpiValue[static_cast<size_t>(i)]);
+        cardLayout->addWidget(m_kpiSub[static_cast<size_t>(i)]);
+        kpiRow->addWidget(card, 1);
+    }
+    layout->addLayout(kpiRow);
+
+    auto *middle = new QHBoxLayout;
+    middle->setSpacing(12);
+
+    QFrame *chartCard = makeCard(page);
+    auto *chartLayout = new QVBoxLayout(chartCard);
+    chartLayout->setContentsMargins(20, 16, 20, 16);
+    chartLayout->addWidget(makeTitle(tr("Présences par jour"), chartCard));
+    m_chart = new DayChart(chartCard);
+    chartLayout->addWidget(m_chart, 1);
+    middle->addWidget(chartCard, 2);
+
+    QFrame *rateCard = makeCard(page);
+    auto *rateLayout = new QVBoxLayout(rateCard);
+    rateLayout->setContentsMargins(20, 16, 20, 16);
+    rateLayout->addWidget(makeTitle(tr("Taux de présence du mois"), rateCard));
+    m_rate = new RateRing(rateCard);
+    rateLayout->addWidget(m_rate, 1, Qt::AlignCenter);
+    middle->addWidget(rateCard, 1);
+    layout->addLayout(middle, 1);
+
+    QFrame *notifyCard = makeCard(page);
+    auto *notifyLayout = new QVBoxLayout(notifyCard);
+    notifyLayout->setContentsMargins(20, 16, 20, 16);
+    notifyLayout->addWidget(makeTitle(tr("Notifications"), notifyCard));
+    auto *notifyScroll = new QScrollArea(notifyCard);
+    notifyScroll->setWidgetResizable(true);
+    notifyScroll->setFrameShape(QFrame::NoFrame);
+    notifyScroll->setMinimumHeight(160);
+    notifyScroll->setMaximumHeight(240);
+    notifyScroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; }"));
+    notifyScroll->viewport()->setAutoFillBackground(false);
+    m_notifyBody = makeMuted(QString(), notifyScroll);
+    m_notifyBody->setTextFormat(Qt::PlainText);
+    m_notifyBody->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    notifyScroll->setWidget(m_notifyBody);
+    notifyLayout->addWidget(notifyScroll);
+    layout->addWidget(notifyCard);
+
+    QFrame *tools = makeCard(page);
+    auto *toolsLayout = new QHBoxLayout(tools);
+    toolsLayout->setContentsMargins(20, 16, 20, 16);
+    toolsLayout->setSpacing(10);
+    toolsLayout->addWidget(makeMuted(tr("Import / export des listes."), tools), 1);
+    auto *importButton = new QPushButton(tr("Importer Excel"), tools);
+    connect(importButton, &QPushButton::clicked, this, &MainWindow::importRoster);
+    auto *exportButton = new QPushButton(tr("Exporter Excel"), tools);
+    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportRoster);
+    toolsLayout->addWidget(importButton);
+    toolsLayout->addWidget(exportButton);
+    layout->addWidget(tools);
     return page;
 }
 
@@ -353,74 +421,7 @@ QWidget *MainWindow::buildAnalysisPage()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
     layout->addWidget(makeTitle(tr("Analyse"), page));
-
-    const QStringList titles{tr("Présence"), tr("Absence"), tr("Retard"), tr("Notifications")};
-    auto *kpiRow = new QHBoxLayout;
-    kpiRow->setSpacing(12);
-    for (int i = 0; i < 4; ++i) {
-        QFrame *card = makeCard(page);
-        auto *cardLayout = new QVBoxLayout(card);
-        cardLayout->setContentsMargins(18, 14, 18, 14);
-        cardLayout->setSpacing(4);
-        cardLayout->addWidget(makeMuted(titles.at(i), card));
-        m_kpiValue[static_cast<size_t>(i)] = makeTitle(QStringLiteral("0"), card);
-        m_kpiSub[static_cast<size_t>(i)] = makeMuted(QString(), card);
-        cardLayout->addWidget(m_kpiValue[static_cast<size_t>(i)]);
-        cardLayout->addWidget(m_kpiSub[static_cast<size_t>(i)]);
-        kpiRow->addWidget(card, 1);
-    }
-    layout->addLayout(kpiRow);
-
-    auto *middle = new QHBoxLayout;
-    middle->setSpacing(12);
-
-    QFrame *chartCard = makeCard(page);
-    auto *chartLayout = new QVBoxLayout(chartCard);
-    chartLayout->setContentsMargins(20, 16, 20, 16);
-    chartLayout->addWidget(makeTitle(tr("Présences par jour"), chartCard));
-    m_chart = new DayChart(chartCard);
-    chartLayout->addWidget(m_chart, 1);
-    middle->addWidget(chartCard, 2);
-
-    QFrame *rateCard = makeCard(page);
-    auto *rateLayout = new QVBoxLayout(rateCard);
-    rateLayout->setContentsMargins(20, 16, 20, 16);
-    rateLayout->addWidget(makeTitle(tr("Taux de présence du mois"), rateCard));
-    m_rate = new RateRing(rateCard);
-    rateLayout->addWidget(m_rate, 1, Qt::AlignCenter);
-    middle->addWidget(rateCard, 1);
-    layout->addLayout(middle, 1);
-
-    QFrame *notifyCard = makeCard(page);
-    auto *notifyLayout = new QVBoxLayout(notifyCard);
-    notifyLayout->setContentsMargins(20, 16, 20, 16);
-    notifyLayout->addWidget(makeTitle(tr("Notifications"), notifyCard));
-    auto *notifyScroll = new QScrollArea(notifyCard);
-    notifyScroll->setWidgetResizable(true);
-    notifyScroll->setFrameShape(QFrame::NoFrame);
-    notifyScroll->setMinimumHeight(160);
-    notifyScroll->setMaximumHeight(240);
-    notifyScroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; }"));
-    notifyScroll->viewport()->setAutoFillBackground(false);
-    m_notifyBody = makeMuted(QString(), notifyScroll);
-    m_notifyBody->setTextFormat(Qt::PlainText);
-    m_notifyBody->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    notifyScroll->setWidget(m_notifyBody);
-    notifyLayout->addWidget(notifyScroll);
-    layout->addWidget(notifyCard);
-
-    QFrame *tools = makeCard(page);
-    auto *toolsLayout = new QHBoxLayout(tools);
-    toolsLayout->setContentsMargins(20, 16, 20, 16);
-    toolsLayout->setSpacing(10);
-    toolsLayout->addWidget(makeMuted(tr("Import / export des listes."), tools), 1);
-    auto *importButton = new QPushButton(tr("Importer Excel"), tools);
-    connect(importButton, &QPushButton::clicked, this, &MainWindow::importRoster);
-    auto *exportButton = new QPushButton(tr("Exporter Excel"), tools);
-    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportRoster);
-    toolsLayout->addWidget(importButton);
-    toolsLayout->addWidget(exportButton);
-    layout->addWidget(tools);
+    layout->addWidget(buildTableCard(), 1);
     return page;
 }
 
