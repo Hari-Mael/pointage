@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QComboBox>
+#include <QDialog>
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
@@ -11,6 +12,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
@@ -24,6 +26,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "accountpanel.h"
@@ -51,6 +54,15 @@ constexpr int kDayColumnWidth = 36;
 constexpr int kActionsColumnWidth = 540;
 constexpr int kRowHeight = 40;
 constexpr int kAbsenceRecidive = 2;
+constexpr double kPi = 3.14159265358979323846;
+
+// Ordre des pages : identique à l'ordre de Sidebar::Section.
+constexpr int kPageHome = 0;
+constexpr int kPageDashboard = 1;
+constexpr int kPageActions = 2;
+constexpr int kPageAnalysis = 3;
+constexpr int kPagePlans = 4;
+constexpr int kPageSettings = 5;
 
 const char *const kDayShort[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
 
@@ -80,6 +92,30 @@ QLabel *makeMuted(const QString &text, QWidget *parent)
     label->setObjectName(QStringLiteral("muted"));
     label->setWordWrap(true);
     return label;
+}
+
+// Carte cliquable : un QPushButton contenant titre, valeur et texte secondaire.
+QPushButton *makeClickCard(const QString &title, const QString &hint, QLabel *&value, QLabel *&sub, QWidget *parent)
+{
+    auto *card = new QPushButton(parent);
+    card->setObjectName(QStringLiteral("navCard"));
+    card->setMinimumHeight(130);
+    card->setCursor(Qt::PointingHandCursor);
+    card->setStyleSheet(QStringLiteral(
+        "QPushButton#navCard { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);"
+        " border-radius: 22px; text-align: left; padding: 0px; }"
+        "QPushButton#navCard:hover { background: rgba(255,255,255,0.16); border: 1px solid rgba(52,211,153,0.6); }"));
+
+    auto *layout = new QVBoxLayout(card);
+    layout->setContentsMargins(20, 16, 20, 16);
+    layout->setSpacing(4);
+    layout->addWidget(makeMuted(title, card));
+    value = makeTitle(QStringLiteral("0"), card);
+    sub = makeMuted(hint, card);
+    layout->addWidget(value);
+    layout->addWidget(sub);
+    layout->addStretch(1);
+    return card;
 }
 
 QString nextCodeFor(const std::vector<CloudPerson> &people, int kind, QChar prefix)
@@ -186,6 +222,88 @@ private:
     int m_value = 0;
 };
 
+// Jauge demi-cercle avec aiguille, utilisée dans les rapports.
+class NeedleGauge : public QWidget {
+public:
+    explicit NeedleGauge(QWidget *parent = nullptr) : QWidget(parent)
+    {
+        setMinimumSize(260, 160);
+    }
+
+    void setValue(int value)
+    {
+        m_value = std::clamp(value, 0, 100);
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const double cx = width() / 2.0;
+        const double cy = height() - 18.0;
+        const double r = std::min(width() / 2.0 - 16.0, height() - 34.0);
+        const QRectF rect(cx - r, cy - r, 2 * r, 2 * r);
+
+        QPen track(QColor(255, 255, 255, 40));
+        track.setWidth(16);
+        painter.setPen(track);
+        painter.drawArc(rect, 180 * 16, -180 * 16);
+
+        QPen arc(QColor(52, 211, 153));
+        arc.setWidth(16);
+        painter.setPen(arc);
+        painter.drawArc(rect, 180 * 16, -m_value * 180 * 16 / 100);
+
+        const double angle = (180.0 - m_value * 180.0 / 100.0) * kPi / 180.0;
+        QPen needle(QColor("#f4fbf8"));
+        needle.setWidth(3);
+        painter.setPen(needle);
+        painter.drawLine(QPointF(cx, cy),
+                         QPointF(cx + (r - 22.0) * std::cos(angle), cy - (r - 22.0) * std::sin(angle)));
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor("#f4fbf8"));
+        painter.drawEllipse(QPointF(cx, cy), 6.0, 6.0);
+    }
+
+private:
+    int m_value = 0;
+};
+
+void showReportDialog(QWidget *parent, const QString &title, int percent, const QString &summary,
+                      const QStringList &items)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle(title);
+    dialog.resize(520, 600);
+
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *gauge = new NeedleGauge(&dialog);
+    gauge->setValue(percent);
+    layout->addWidget(gauge, 1);
+
+    auto *value = new QLabel(QStringLiteral("%1 %").arg(percent), &dialog);
+    value->setObjectName(QStringLiteral("title"));
+    value->setAlignment(Qt::AlignCenter);
+    layout->addWidget(value);
+
+    auto *text = new QLabel(summary, &dialog);
+    text->setWordWrap(true);
+    layout->addWidget(text);
+
+    auto *list = new QListWidget(&dialog);
+    list->addItems(items);
+    layout->addWidget(list, 2);
+
+    auto *close = new QPushButton(QObject::tr("Fermer"), &dialog);
+    QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    layout->addWidget(close, 0, Qt::AlignRight);
+
+    dialog.exec();
+}
+
 }
 
 MainWindow::MainWindow(CloudStore &store, const QString &userName, const QString &userEmail, QWidget *parent)
@@ -234,6 +352,7 @@ void MainWindow::buildUi()
     mainLayout->addWidget(buildHeader());
 
     m_pages = new QStackedWidget(main);
+    m_pages->addWidget(buildHomePage());
     m_pages->addWidget(buildDashboardPage());
     m_pages->addWidget(buildActionsPage());
     m_pages->addWidget(buildAnalysisPage());
@@ -271,10 +390,44 @@ QWidget *MainWindow::buildHeader()
     connect(m_yearBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { refresh(); });
     connect(m_avatarButton, &QPushButton::clicked, this, &MainWindow::changeUserAvatar);
     connect(m_header, &HeaderBar::settingsRequested, this, &MainWindow::openSettings);
-    connect(m_header, &HeaderBar::homeRequested, this, [this]() { refresh(); });
+    connect(m_header, &HeaderBar::notificationsRequested, this, &MainWindow::showNotifications);
     connect(m_header, &HeaderBar::menuToggleRequested, this, &MainWindow::toggleSidebar);
-    connect(m_search, &QLineEdit::textChanged, this, &MainWindow::applySearch);
+    connect(m_search, &QLineEdit::textChanged, this, &MainWindow::onSearchChanged);
     return m_header;
+}
+
+QWidget *MainWindow::buildHomePage()
+{
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    layout->addWidget(makeTitle(tr("Accueil"), page));
+    layout->addWidget(makeMuted(tr("Accès rapide à la fiche de présence, aux élèves et aux employés."), page));
+
+    QLabel *sub = nullptr;
+    auto *ficheCard = makeClickCard(tr("Fiche de présence"), tr("pointage mensuel de tous"), m_homeValue[0], sub, page);
+    auto *studentCard = makeClickCard(tr("Élèves"), tr("élèves inscrits"), m_homeValue[1], sub, page);
+    auto *employeeCard = makeClickCard(tr("Employés"), tr("employés"), m_homeValue[2], sub, page);
+
+    connect(ficheCard, &QPushButton::clicked, this, [this]() { showSection(kPageAnalysis); });
+    connect(studentCard, &QPushButton::clicked, this, [this]() {
+        setKind(kKindStudent);
+        showSection(kPageAnalysis);
+    });
+    connect(employeeCard, &QPushButton::clicked, this, [this]() {
+        setKind(kKindEmployee);
+        showSection(kPageAnalysis);
+    });
+
+    auto *cards = new QHBoxLayout;
+    cards->setSpacing(12);
+    cards->addWidget(ficheCard, 1);
+    cards->addWidget(studentCard, 1);
+    cards->addWidget(employeeCard, 1);
+    layout->addLayout(cards);
+    layout->addStretch(1);
+    return page;
 }
 
 QWidget *MainWindow::buildDashboardPage()
@@ -289,15 +442,9 @@ QWidget *MainWindow::buildDashboardPage()
     auto *kpiRow = new QHBoxLayout;
     kpiRow->setSpacing(12);
     for (int i = 0; i < 4; ++i) {
-        QFrame *card = makeCard(page);
-        auto *cardLayout = new QVBoxLayout(card);
-        cardLayout->setContentsMargins(18, 14, 18, 14);
-        cardLayout->setSpacing(4);
-        cardLayout->addWidget(makeMuted(titles.at(i), card));
-        m_kpiValue[static_cast<size_t>(i)] = makeTitle(QStringLiteral("0"), card);
-        m_kpiSub[static_cast<size_t>(i)] = makeMuted(QString(), card);
-        cardLayout->addWidget(m_kpiValue[static_cast<size_t>(i)]);
-        cardLayout->addWidget(m_kpiSub[static_cast<size_t>(i)]);
+        QPushButton *card = makeClickCard(titles.at(i), QString(), m_kpiValue[static_cast<size_t>(i)],
+                                          m_kpiSub[static_cast<size_t>(i)], page);
+        connect(card, &QPushButton::clicked, this, [this, i]() { openKpiReport(i); });
         kpiRow->addWidget(card, 1);
     }
     layout->addLayout(kpiRow);
@@ -420,7 +567,7 @@ QWidget *MainWindow::buildAnalysisPage()
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
-    layout->addWidget(makeTitle(tr("Analyse"), page));
+    layout->addWidget(makeTitle(tr("Fiche de présence"), page));
     layout->addWidget(buildTableCard(), 1);
     return page;
 }
@@ -574,6 +721,10 @@ void MainWindow::refresh()
             m_people.push_back(person);
     }
 
+    m_homeValue[0]->setText(QString::number(employees + students));
+    m_homeValue[1]->setText(QString::number(students));
+    m_homeValue[2]->setText(QString::number(employees));
+
     m_tabEmp->setText(tr("Employés (%1)").arg(employees));
     m_tabStu->setText(tr("Élèves (%1)").arg(students));
     m_tabEmp->setChecked(m_kind == kKindEmployee);
@@ -652,7 +803,7 @@ void MainWindow::refresh()
     updateAnalysis(year, month);
 
     const int pending = static_cast<int>(m_store.pendingChanges());
-    m_header->setPendingCount(pending);
+    m_header->setBellCount(static_cast<int>(m_notifications.size()), pending);
     if (m_pendingLabel)
         m_pendingLabel->setText(tr("Modifications en attente d'envoi : %1").arg(pending));
 }
@@ -668,14 +819,21 @@ void MainWindow::updateAnalysis(int year, int month)
         lastDay = (last <= today) ? days : today.day();
 
     std::vector<int> presentByDay(static_cast<size_t>(days) + 1, 0);
-    int presentTotal = 0;
-    int absentTotal = 0;
-    int lateTotal = 0;
-    int possibleTotal = 0;
-    QStringList notifications;
+    m_presentTotal = 0;
+    m_absentTotal = 0;
+    m_lateTotal = 0;
+    m_possibleTotal = 0;
+    m_peopleCount = 0;
+    m_presenceLines.clear();
+    m_absenceLines.clear();
+    m_lateLines.clear();
+    m_notifications.clear();
 
     for (const CloudPerson &person : m_people) {
+        ++m_peopleCount;
         const CloudMarks marks = m_marks.value(person.id);
+        int present = 0;
+        int possible = 0;
         int absences = 0;
         int lates = 0;
         int unmarked = 0;
@@ -683,21 +841,29 @@ void MainWindow::updateAnalysis(int year, int month)
         for (int day = 1; day <= lastDay; ++day) {
             if (isRestDay(QDate(year, month, day)))
                 continue;
-            ++possibleTotal;
+            ++possible;
             const QChar status = marks.value(day);
             if (status == QChar('P') || status == QChar('R')) {
-                ++presentTotal;
+                ++present;
                 ++presentByDay[static_cast<size_t>(day)];
-                if (status == QChar('R')) {
+                if (status == QChar('R'))
                     ++lates;
-                    ++lateTotal;
-                }
             } else if (status == QChar('A')) {
                 ++absences;
-                ++absentTotal;
             } else {
                 ++unmarked;
             }
+        }
+
+        m_possibleTotal += possible;
+        m_presentTotal += present;
+        m_absentTotal += absences;
+        m_lateTotal += lates;
+
+        if (possible > 0) {
+            m_presenceLines << QStringLiteral("%1 — %2 %").arg(person.name).arg(present * 100 / possible);
+            m_absenceLines << QStringLiteral("%1 — %2 %").arg(person.name).arg(absences * 100 / possible);
+            m_lateLines << QStringLiteral("%1 — %2 %").arg(person.name).arg(lates * 100 / possible);
         }
 
         QStringList reasons;
@@ -708,18 +874,18 @@ void MainWindow::updateAnalysis(int year, int month)
         if (absences >= kAbsenceRecidive)
             reasons << tr("absence récidive : %1").arg(absences);
         if (!reasons.isEmpty())
-            notifications << QStringLiteral("%1 — %2").arg(person.name, reasons.join(QStringLiteral(", ")));
+            m_notifications << QStringLiteral("%1 — %2").arg(person.name, reasons.join(QStringLiteral(", ")));
     }
 
-    const int rate = possibleTotal > 0 ? presentTotal * 100 / possibleTotal : 0;
+    const int rate = m_possibleTotal > 0 ? m_presentTotal * 100 / m_possibleTotal : 0;
 
-    m_kpiValue[0]->setText(QString::number(presentTotal));
-    m_kpiSub[0]->setText(tr("sur %1 jour(s) à pointer").arg(possibleTotal));
-    m_kpiValue[1]->setText(QString::number(absentTotal));
+    m_kpiValue[0]->setText(QString::number(m_presentTotal));
+    m_kpiSub[0]->setText(tr("sur %1 jour(s) à pointer").arg(m_possibleTotal));
+    m_kpiValue[1]->setText(QString::number(m_absentTotal));
     m_kpiSub[1]->setText(tr("cases marquées absent"));
-    m_kpiValue[2]->setText(QString::number(lateTotal));
+    m_kpiValue[2]->setText(QString::number(m_lateTotal));
     m_kpiSub[2]->setText(tr("cases marquées retard"));
-    m_kpiValue[3]->setText(QString::number(notifications.size()));
+    m_kpiValue[3]->setText(QString::number(m_notifications.size()));
     m_kpiSub[3]->setText(tr("personne(s) à suivre"));
 
     static_cast<RateRing *>(m_rate)->setValue(rate);
@@ -729,9 +895,75 @@ void MainWindow::updateAnalysis(int year, int month)
         series[static_cast<size_t>(day - 1)] = presentByDay[static_cast<size_t>(day)];
     static_cast<DayChart *>(m_chart)->setValues(series);
 
-    m_notifyBody->setText(notifications.isEmpty()
+    m_notifyBody->setText(m_notifications.isEmpty()
                               ? tr("Aucune notification pour cette période.")
-                              : notifications.join(QLatin1Char('\n')));
+                              : m_notifications.join(QLatin1Char('\n')));
+}
+
+void MainWindow::openKpiReport(int index)
+{
+    const int possible = std::max(1, m_possibleTotal);
+    int percent = 0;
+    QString title;
+    QString summary;
+    QStringList items;
+
+    switch (index) {
+    case 0:
+        title = tr("Présence — taux de présentéisme");
+        percent = m_presentTotal * 100 / possible;
+        summary = tr("%1 présence(s) sur %2 jour(s) à pointer (repos exclus), retards compris.")
+                      .arg(m_presentTotal).arg(m_possibleTotal);
+        items = m_presenceLines;
+        break;
+    case 1:
+        title = tr("Absence — taux d'absence");
+        percent = m_absentTotal * 100 / possible;
+        summary = tr("%1 absence(s) sur %2 jour(s) à pointer.").arg(m_absentTotal).arg(m_possibleTotal);
+        items = m_absenceLines;
+        break;
+    case 2:
+        title = tr("Retard — taux de retard");
+        percent = m_lateTotal * 100 / possible;
+        summary = tr("%1 retard(s) sur %2 jour(s) à pointer.").arg(m_lateTotal).arg(m_possibleTotal);
+        items = m_lateLines;
+        break;
+    default:
+        title = tr("Notifications");
+        percent = m_peopleCount > 0 ? static_cast<int>(m_notifications.size()) * 100 / m_peopleCount : 0;
+        summary = tr("%1 personne(s) sur %2 à suivre : non pointés, retards ou absences en récidive.")
+                      .arg(m_notifications.size()).arg(m_peopleCount);
+        items = m_notifications;
+        break;
+    }
+
+    if (items.isEmpty())
+        items << tr("Aucune donnée pour cette période.");
+    showReportDialog(this, title, percent, summary, items);
+}
+
+void MainWindow::showNotifications()
+{
+    QMenu menu(this);
+    if (m_notifications.isEmpty()) {
+        menu.addAction(tr("Aucune notification"));
+    } else {
+        for (const QString &line : m_notifications.mid(0, 30))
+            menu.addAction(line);
+        if (m_notifications.size() > 30)
+            menu.addAction(tr("... et %1 autre(s)").arg(m_notifications.size() - 30));
+    }
+    menu.addSeparator();
+    menu.addAction(tr("Ouvrir la fiche de présence"), [this]() { showSection(kPageAnalysis); });
+
+    QPushButton *bell = m_header->bellButton();
+    menu.exec(bell->mapToGlobal(QPoint(0, bell->height())));
+}
+
+void MainWindow::showSection(int page)
+{
+    m_sidebar->setCurrentSection(static_cast<Sidebar::Section>(page));
+    m_pages->setCurrentIndex(page);
 }
 
 void MainWindow::applySearch()
@@ -745,6 +977,13 @@ void MainWindow::applySearch()
                            || name.contains(needle, Qt::CaseInsensitive);
         m_table->setRowHidden(row, !match);
     }
+}
+
+void MainWindow::onSearchChanged()
+{
+    if (!m_search->text().trimmed().isEmpty() && m_pages->currentIndex() != kPageAnalysis)
+        showSection(kPageAnalysis);
+    applySearch();
 }
 
 void MainWindow::onCellClicked(int row, int column)
@@ -1080,8 +1319,7 @@ void MainWindow::deletePerson(const QString &personId)
 
 void MainWindow::openSettings()
 {
-    m_sidebar->setCurrentSection(Sidebar::Settings);
-    m_pages->setCurrentIndex(4);
+    showSection(kPageSettings);
 }
 
 void MainWindow::toggleSidebar()
