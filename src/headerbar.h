@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class QLabel;
+class QResizeEvent;
 
 class HeaderBar : public QWidget {
     Q_OBJECT
@@ -27,11 +28,16 @@ signals:
     void notificationsRequested();
     void settingsRequested();
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
     QPushButton *m_menuToggle = nullptr;
     QPushButton *m_bell = nullptr;
     QPushButton *m_avatar = nullptr;
-    QLabel *m_school = nullptr;
+    QLabel *m_schoolTitle = nullptr;
+    QLabel *m_profileName = nullptr;
+    QLabel *m_profileMail = nullptr;
     QLineEdit *m_search = nullptr;
     QComboBox *m_month = nullptr;
     QSpinBox *m_year = nullptr;
