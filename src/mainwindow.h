@@ -14,7 +14,6 @@
 class HeaderBar;
 class QLabel;
 class QLineEdit;
-class QProgressBar;
 class QPushButton;
 class QStackedWidget;
 class QTableWidget;
@@ -95,7 +94,7 @@ private:
     std::array<QPushButton *, 7> m_chips{};
     std::array<QLabel *, 4> m_kpiValue{};
     std::array<QLabel *, 4> m_kpiSub{};
-    QProgressBar *m_rateBar = nullptr;
+    QWidget *m_rate = nullptr;
     QWidget *m_chart = nullptr;
     QLabel *m_notifyBody = nullptr;
 };
