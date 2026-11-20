@@ -366,8 +366,15 @@ QWidget *MainWindow::buildHomePage()
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
-    layout->addWidget(makeTitle(tr("Accueil"), page));
-    layout->addWidget(makeMuted(tr("Accès rapide à la fiche de présence, aux élèves et aux employés."), page));
+
+    auto *titleRow = new QHBoxLayout;
+    titleRow->addWidget(makeTitle(tr("Accueil"), page));
+    titleRow->addStretch(1);
+    auto *ficheButton = new QPushButton(tr("Fiche de présence"), page);
+    ficheButton->setMinimumHeight(40);
+    connect(ficheButton, &QPushButton::clicked, this, [this]() { showSection(kPageAnalysis); });
+    titleRow->addWidget(ficheButton);
+    layout->addLayout(titleRow);
 
     QLabel *sub = nullptr;
     auto *ficheCard = makeClickCard(tr("Fiche de présence"), tr("pointage mensuel de tous"), m_homeValue[0], sub, page);
