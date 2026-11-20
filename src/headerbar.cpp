@@ -16,7 +16,6 @@ QFrame#topBar { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,2
 QFrame#profile { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px; }
 QLabel#profileName { color: #f4fbf8; font-weight: 700; }
 QLabel#profileMail { color: #9fbfb4; font-size: 9pt; }
-QLabel#bannerKicker { color: #a7f3d0; font-size: 8pt; font-weight: 700; }
 QLabel#bannerTitle { color: #ffffff; font-size: 14pt; font-weight: 800; }
 QPushButton#menuToggle { font-size: 16pt; font-weight: 800; padding: 0px; min-width: 40px; max-width: 40px; min-height: 36px; max-height: 36px; }
 QLineEdit#headerSearch { background: rgba(0,0,0,0.28); color: #eaf6f1; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 8px 14px; }
@@ -46,15 +45,9 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     m_menuToggle->setToolTip(tr("Afficher / masquer le menu"));
     top->addWidget(m_menuToggle);
 
-    auto *titles = new QVBoxLayout;
-    titles->setSpacing(0);
-    auto *kicker = new QLabel(tr("FEUILLE DE POINTAGE"), topBar);
-    kicker->setObjectName(QStringLiteral("bannerKicker"));
     m_school = new QLabel(SchoolInfo::name(), topBar);
     m_school->setObjectName(QStringLiteral("bannerTitle"));
-    titles->addWidget(kicker);
-    titles->addWidget(m_school);
-    top->addLayout(titles);
+    top->addWidget(m_school);
 
     m_search = new QLineEdit(topBar);
     m_search->setObjectName(QStringLiteral("headerSearch"));
