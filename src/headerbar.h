@@ -17,14 +17,15 @@ public:
     QComboBox *monthBox() const { return m_month; }
     QSpinBox *yearBox() const { return m_year; }
     QPushButton *avatarButton() const { return m_avatar; }
+    QPushButton *bellButton() const { return m_bell; }
     QLineEdit *searchEdit() const { return m_search; }
     void setAvatar(const QPixmap &avatar);
-    void setPendingCount(int count);
+    void setBellCount(int notifications, int pending);
 
 signals:
-    void homeRequested();
-    void settingsRequested();
     void menuToggleRequested();
+    void notificationsRequested();
+    void settingsRequested();
 
 private:
     QPushButton *m_menuToggle = nullptr;
