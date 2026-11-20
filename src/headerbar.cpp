@@ -21,7 +21,6 @@ QLabel#bannerTitle { color: #ffffff; font-size: 14pt; font-weight: 800; }
 QPushButton#menuToggle { font-size: 16pt; font-weight: 800; padding: 0px; min-width: 40px; max-width: 40px; min-height: 36px; max-height: 36px; }
 QLineEdit#headerSearch { background: rgba(0,0,0,0.28); color: #eaf6f1; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 8px 14px; }
 QLineEdit#headerSearch:focus { border: 1px solid #34d399; }
-QFrame#banner { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(52,211,153,0.35), stop:1 rgba(245,176,65,0.30)); border: 1px solid rgba(255,255,255,0.14); border-radius: 22px; }
 QComboBox#bannerCombo, QSpinBox#bannerSpin { background: rgba(255,255,255,0.12); color: #ffffff; border: 1px solid rgba(255,255,255,0.25); border-radius: 12px; padding: 6px 10px; }
 )";
 
@@ -104,18 +103,8 @@ HeaderBar::HeaderBar(const QString &userName, const QString &userEmail, const QP
     top->addWidget(profile);
     root->addWidget(topBar);
 
-    auto *banner = new QFrame(this);
-    banner->setObjectName(QStringLiteral("banner"));
-    auto *bannerLayout = new QHBoxLayout(banner);
-    bannerLayout->setContentsMargins(24, 14, 24, 14);
-    bannerLayout->addStretch(1);
-    auto *schoolSettings = new QPushButton(tr("Voir les paramètres"), banner);
-    bannerLayout->addWidget(schoolSettings);
-    root->addWidget(banner);
-
     connect(m_menuToggle, &QPushButton::clicked, this, &HeaderBar::menuToggleRequested);
     connect(m_bell, &QPushButton::clicked, this, &HeaderBar::homeRequested);
-    connect(schoolSettings, &QPushButton::clicked, this, &HeaderBar::settingsRequested);
 }
 
 void HeaderBar::setAvatar(const QPixmap &avatar)
