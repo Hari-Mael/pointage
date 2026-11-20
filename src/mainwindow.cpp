@@ -17,6 +17,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QStackedWidget>
@@ -53,6 +54,9 @@ constexpr int kDayColumnWidth = 36;
 constexpr int kActionsColumnWidth = 540;
 constexpr int kRowHeight = 40;
 constexpr int kAbsenceRecidive = 2;
+constexpr int kMinWidth = 900;
+constexpr int kMinHeight = 600;
+constexpr int kNarrowWidth = 1000;
 constexpr double kPi = 3.14159265358979323846;
 
 constexpr int kPageHome = 0;
@@ -178,7 +182,7 @@ class RateRing : public QWidget {
 public:
     explicit RateRing(QWidget *parent = nullptr) : QWidget(parent)
     {
-        setMinimumSize(160, 160);
+        setMinimumSize(120, 120);
     }
 
     void setValue(int value)
@@ -223,7 +227,7 @@ class NeedleGauge : public QWidget {
 public:
     explicit NeedleGauge(QWidget *parent = nullptr) : QWidget(parent)
     {
-        setMinimumSize(260, 160);
+        setMinimumSize(200, 120);
     }
 
     void setValue(int value)
@@ -274,10 +278,23 @@ MainWindow::MainWindow(CloudStore &store, const QString &userName, const QString
     : QMainWindow(parent), m_store(store), m_userName(userName), m_userEmail(userEmail)
 {
     setWindowTitle(tr("Feuille de Pointage Pro — %1").arg(userName));
+    setMinimumSize(kMinWidth, kMinHeight);
     resize(1180, 820);
     m_store.fetchAvatar(m_userAvatar);
     buildUi();
     refresh();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    if (!m_sidebar)
+        return;
+    const bool narrow = width() < kNarrowWidth;
+    if (narrow != m_narrow) {
+        m_narrow = narrow;
+        m_sidebar->setVisible(!narrow);
+    }
 }
 
 void MainWindow::reportWriteResult(bool ok, const QString &action)
@@ -322,7 +339,15 @@ void MainWindow::buildUi()
     m_pages->addWidget(buildAnalysisPage());
     m_pages->addWidget(buildPlansPage());
     m_pages->addWidget(buildSettingsPage());
-    mainLayout->addWidget(m_pages, 1);
+
+    auto *scroll = new QScrollArea(main);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; }"));
+    scroll->viewport()->setAutoFillBackground(false);
+    scroll->setWidget(m_pages);
+    mainLayout->addWidget(scroll, 1);
+
     shellLayout->addWidget(main, 1);
     setCentralWidget(shell);
 
@@ -368,8 +393,7 @@ QWidget *MainWindow::buildHomePage()
     layout->setSpacing(12);
 
     auto *titleRow = new QHBoxLayout;
-    titleRow->addWidget(makeTitle(tr("Accueil"), page));
-    titleRow->addStretch(1);
+    titleRow->addWidget(makeTitle(tr("Accueil"), page), 1);
     auto *ficheButton = new QPushButton(tr("Fiche de présence"), page);
     ficheButton->setMinimumHeight(40);
     connect(ficheButton, &QPushButton::clicked, this, [this]() { showSection(kPageAnalysis); });
@@ -421,13 +445,14 @@ QWidget *MainWindow::buildDashboardPage()
     layout->addLayout(kpiRow);
 
     QFrame *reportCard = makeCard(page);
-    reportCard->setMinimumHeight(300);
+    reportCard->setMinimumHeight(260);
     auto *reportLayout = new QHBoxLayout(reportCard);
     reportLayout->setContentsMargins(20, 16, 20, 16);
     reportLayout->setSpacing(16);
 
     auto *gaugeColumn = new QVBoxLayout;
     m_reportTitle = makeTitle(QString(), reportCard);
+    m_reportTitle->setWordWrap(true);
     gaugeColumn->addWidget(m_reportTitle);
     m_reportGauge = new NeedleGauge(reportCard);
     gaugeColumn->addWidget(m_reportGauge, 1);
@@ -474,7 +499,7 @@ QWidget *MainWindow::buildDashboardPage()
     auto *notifyScroll = new QScrollArea(notifyCard);
     notifyScroll->setWidgetResizable(true);
     notifyScroll->setFrameShape(QFrame::NoFrame);
-    notifyScroll->setMinimumHeight(160);
+    notifyScroll->setMinimumHeight(120);
     notifyScroll->setMaximumHeight(240);
     notifyScroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; }"));
     notifyScroll->viewport()->setAutoFillBackground(false);
@@ -689,6 +714,7 @@ QWidget *MainWindow::buildTableCard()
     m_table->setFocusPolicy(Qt::NoFocus);
     m_table->verticalHeader()->setVisible(false);
     m_table->verticalHeader()->setDefaultSectionSize(kRowHeight);
+    m_table->setMinimumHeight(240);
     connect(m_table, &QTableWidget::cellClicked, this, &MainWindow::onCellClicked);
     layout->addWidget(m_table, 1);
 
