@@ -10,14 +10,17 @@ Sidebar::Sidebar(QWidget *parent)
 {
     setObjectName(QStringLiteral("sidebar"));
     setFixedWidth(230);
+    setStyleSheet(QStringLiteral(
+        "QFrame#sidebar {"
+        " background: qlineargradient(x1:0, y1:0, x2:1, y2:1,"
+        "   stop:0 rgba(255,255,255,0.20), stop:0.45 rgba(255,255,255,0.07), stop:1 rgba(255,255,255,0.14));"
+        " border: 1px solid rgba(255,255,255,0.30);"
+        " border-radius: 28px;"
+        "}"));
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 18, 14, 16);
+    layout->setContentsMargins(14, 20, 14, 16);
     layout->setSpacing(4);
-
-    auto *title = new QLabel(QStringLiteral("📋 Feuille de Pointage"), this);
-    title->setObjectName(QStringLiteral("sidebarTitle"));
-    layout->addWidget(title);
 
     auto *group = new QButtonGroup(this);
     group->setExclusive(true);
