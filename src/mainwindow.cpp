@@ -549,15 +549,6 @@ QWidget *MainWindow::buildTableCard()
     return card;
 }
 
-QWidget *MainWindow::buildStats()
-{
-    auto *row = new QWidget(this);
-    auto *layout = new QHBoxLayout(row);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(10);
-    return row;
-}
-
 void MainWindow::refresh()
 {
     const int year = selectedYear();
